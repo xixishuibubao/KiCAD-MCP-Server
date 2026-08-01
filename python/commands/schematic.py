@@ -165,15 +165,17 @@ class SchematicManager:
                 with open(output_path, "w", encoding="utf-8", newline="\n") as f:
                     # KiCad 10 schematic header (matches what eeschema writes for a
                     # new file). The older 20250114 token is the KiCad 9 format and
-                    # is stale under KiCad 10 (issue #221).
+                    # is stale under KiCad 10 (issue #221). Version 20260306 matches
+                    # KiCad 10.0.5's eeschema output.
                     f.write(
-                        '(kicad_sch (version 20260101) (generator "eeschema")'
+                        '(kicad_sch (version 20260306) (generator "eeschema")'
                         ' (generator_version "10.0")\n\n'
                     )
                     f.write(f"  (uuid {schematic_uuid})\n\n")
                     f.write('  (paper "A4")\n\n')
                     f.write("  (lib_symbols\n  )\n\n")
                     f.write('  (sheet_instances\n    (path "/" (page "1"))\n  )\n')
+                    f.write('  (embedded_fonts no)\n')
                     f.write(")\n")
 
             # Load the schematic

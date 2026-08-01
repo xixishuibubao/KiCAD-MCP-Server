@@ -1380,7 +1380,7 @@ def generate_kicad_sch(
     out: List[str] = []
 
     out.append(
-        '(kicad_sch (version 20260101) (generator "eeschema")' ' (generator_version "10.0")\n\n'
+        '(kicad_sch (version 20260306) (generator "eeschema")' ' (generator_version "10.0")\n\n'
     )
     out.append(f"  (uuid {sch_uuid})\n\n")
     out.append(f'  (paper "{paper}")\n\n')

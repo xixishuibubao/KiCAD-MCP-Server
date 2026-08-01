@@ -1,4 +1,4 @@
-(kicad_sch (version 20250114) (generator "KiCAD-MCP-Server")
+(kicad_sch (version 20260306) (generator "KiCAD-MCP-Server") (generator_version "10.0")
 
   (uuid c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f)
 
@@ -731,4 +731,6 @@
   (sheet_instances
     (path "/" (page "1"))
   )
+
+  (embedded_fonts no)
 )
