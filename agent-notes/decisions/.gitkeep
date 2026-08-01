@@ -1,0 +1,5 @@
+# Decisions
+
+存放重要技术决策与方案选型记录（ADR 风格）。
+
+命名约定：`YYYY-MM-DD_<topic>_decision.md`

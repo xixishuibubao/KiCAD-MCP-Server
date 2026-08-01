@@ -1,0 +1,5 @@
+# Interactions
+
+存放 agent 与用户的交互会话记录与关键问答摘要。
+
+命名约定：`YYYY-MM-DD_<topic>.md`
