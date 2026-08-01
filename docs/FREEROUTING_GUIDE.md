@@ -23,7 +23,20 @@ The `autoroute` tool performs all four steps in a single call.
 
 ### Freerouting JAR
 
-Download the Freerouting executable JAR:
+The jar is **not** committed to this repo (GitHub fork repos cannot push Git
+LFS objects, and committing ~55 MB directly would bloat history). Download
+it locally to one of the locations below — `check_freerouting` finds it
+automatically.
+
+Recommended: place it in the repo-local resources folder (gitignored, see
+`resources/freerouting/README.md`):
+
+```bash
+curl -L -o resources/freerouting/freerouting.jar \
+  https://github.com/freerouting/freerouting/releases/download/v2.2.4/freerouting-2.2.4-executable.jar
+```
+
+Or use the legacy home location:
 
 ```bash
 mkdir -p ~/.kicad-mcp
@@ -31,14 +44,25 @@ curl -L -o ~/.kicad-mcp/freerouting.jar \
   https://github.com/freerouting/freerouting/releases/download/v2.0.1/freerouting-2.0.1-executable.jar
 ```
 
-The default location is `~/.kicad-mcp/freerouting.jar`. You can override this with:
+The resolution order is: `FREEROUTING_JAR` env var → local
+`resources/freerouting/freerouting.jar` → `~/.kicad-mcp/freerouting.jar`.
+
+You can always override the location with:
 
 - The `freeroutingJar` parameter on any tool call
 - The `FREEROUTING_JAR` environment variable
 
 ### Java Runtime (Option A -- Direct Execution)
 
-Freerouting 2.x requires Java 21 or higher.
+Freerouting 2.x requires Java 21 or higher (the latest **v2.2.4** requires
+**Java 25**). A Windows Temurin JDK 25 installer can be downloaded into
+`resources/freerouting/` (gitignored) for convenience — see
+`resources/freerouting/README.md`. Install it if your machine has no Java 25+
+on PATH:
+
+```powershell
+msiexec /i "resources\freerouting\OpenJDK25U-jdk_x64_windows_hotspot_25.0.4_7.msi" /qb ADDLOCAL=FeatureJava,FeatureEnvironment,FeatureJavaHome
+```
 
 ```bash
 # Ubuntu/Debian

@@ -97,3 +97,9 @@ CLAUDE.md
 
 inspect-tools.mjs
 resources/images/icon_b64.txt
+
+# Freerouting binaries are not tracked in git (fork repos can't push LFS
+# objects). Users must download them locally into resources/freerouting/
+# or ~/.kicad-mcp/ — see resources/freerouting/README.md.
+resources/freerouting/*.jar
+resources/freerouting/*.msi

@@ -24,11 +24,43 @@ from utils.project_settings_guard import preserve_project_settings
 
 logger = logging.getLogger("kicad_interface")
 
-# Default Freerouting JAR location
+# Bundled Freerouting JAR shipped with this repo (resources/freerouting/freerouting.jar).
+# Resolved relative to this file so it works from both a source checkout and an
+# installed package layout that keeps python/ next to resources/.
+def _bundled_freerouting_jar() -> Optional[str]:
+    here = os.path.dirname(os.path.abspath(__file__))  # .../python/commands
+    for root in (
+        os.path.abspath(os.path.join(here, "..", "..")),  # repo/package root
+        os.path.abspath(os.path.join(here, "..", "..", "..")),  # one level up
+    ):
+        cand = os.path.join(root, "resources", "freerouting", "freerouting.jar")
+        if os.path.isfile(cand):
+            return cand
+    return None
+
+
+# Default Freerouting JAR location.
+# Resolution order: FREEROUTING_JAR env var -> bundled repo copy ->
+# ~/.kicad-mcp/freerouting.jar (downloaded by setup).
 DEFAULT_FREEROUTING_JAR = os.environ.get(
     "FREEROUTING_JAR",
-    os.path.join(os.path.expanduser("~"), ".kicad-mcp", "freerouting.jar"),
+    _bundled_freerouting_jar()
+    or os.path.join(os.path.expanduser("~"), ".kicad-mcp", "freerouting.jar"),
 )
+
+# Bundled Windows JDK installer shipped with this repo, if present.
+def bundled_jdk_installer() -> Optional[str]:
+    here = os.path.dirname(os.path.abspath(__file__))
+    for root in (
+        os.path.abspath(os.path.join(here, "..", "..")),
+        os.path.abspath(os.path.join(here, "..", "..", "..")),
+    ):
+        d = os.path.join(root, "resources", "freerouting")
+        if os.path.isdir(d):
+            for name in os.listdir(d):
+                if name.lower().endswith(".msi") and "openjdk" in name.lower():
+                    return os.path.join(d, name)
+    return None
 
 DOCKER_IMAGE = "eclipse-temurin:21-jre"
 
@@ -320,13 +352,17 @@ class FreeroutingCommands:
                 "error": (
                     f"Java found at {java_exe} but version < 21. "
                     "Freerouting 2.x requires Java 21+. "
-                    "Install Java 21+ or Docker."
+                    "Install Java 21+ (a Windows JDK installer can be placed at "
+                    f"{bundled_jdk_installer() or 'resources/freerouting/*.msi'}; "
+                    "see resources/freerouting/README.md) or install Docker."
                 ),
             }
         return {
             "mode": "error",
             "error": (
-                "Neither Java 21+ nor Docker found. " "Install one of them to use Freerouting."
+                "Neither Java 21+ nor Docker found. "
+                "Install one of them to use Freerouting. "
+                f"(A Windows JDK installer can be placed at {bundled_jdk_installer() or 'resources/freerouting/*.msi'}; see resources/freerouting/README.md.)"
             ),
         }
 
@@ -900,6 +936,8 @@ class FreeroutingCommands:
         elif has_docker:
             mode = "docker"
 
+        bundled_jdk = bundled_jdk_installer()
+
         return {
             "success": True,
             "message": "Freerouting dependency check",
@@ -917,7 +955,9 @@ class FreeroutingCommands:
             "freerouting": {
                 "jar_found": jar_exists,
                 "jar_path": jar_path,
+                "bundled": _bundled_freerouting_jar() is not None,
             },
+            "bundledJdkInstaller": bundled_jdk,
             "execution_mode": mode,
             "ready": ready,
         }
