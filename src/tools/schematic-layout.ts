@@ -137,6 +137,45 @@ export function registerSchematicLayoutTools(server: McpServer, callKicadScript:
     },
   );
 
+  // Read-only design-rule checks derived from 经验.md (value missing, power
+  // naming, decoupling, interface, flow direction, junction, annotation).
+  server.tool(
+    "lint_schematic_design_rules",
+    "Read-only design-rule checks for a .kicad_sch, derived from the hardware-engineering playbook. " +
+      "Never modifies the file. Rules: value_missing (every part needs a clear value), " +
+      "power_naming (unify power-rail aliases like 3V3/VCC33/P3V3), decoupling (every IC needs a 100nF cap within 10mm), " +
+      "interface (I2C pull-ups, USB series resistors/ESD), flow_direction (power on top, ground on bottom), " +
+      "junction (wire crossings need a dot), annotation (key nets should be annotated). " +
+      "Returns a structured violation list with severity (error/warning/info).",
+    {
+      schematicPath: z.string().describe("Path to the .kicad_sch file"),
+      rules: z
+        .array(z.enum([
+          "value_missing", "power_naming", "decoupling", "interface",
+          "flow_direction", "junction", "annotation",
+        ]))
+        .optional()
+        .describe("Subset of rules to run (default: all)"),
+    },
+    async (args: any) => {
+      const result = await callKicadScript("lint_schematic_design_rules", args);
+      return {
+        content: [
+          {
+            type: "text",
+            text: result.success
+              ? JSON.stringify({
+                  violations: result.violations,
+                  summary: result.summary,
+                  message: result.message,
+                })
+              : `Failed: ${result.message || "Unknown error"}`,
+          },
+        ],
+      };
+    },
+  );
+
   server.tool(
     "suggest_schematic_declutter",
     "Re-orient overlapping net/global labels so their text lands in free space and becomes readable. Each label's (at x,y) anchor is its electrical connection point, so it is held FIXED — only the orientation (0/90/180/270) and justification change, throwing the text away from component bodies and other labels. Connectivity is never altered. DRY RUN by default: returns proposals [{name, at, from_angle, to_angle}] plus an overlap score (before/after) WITHOUT modifying the schematic. Set apply=true to rewrite the label orientations. (Phase 1: labels only; symbol spreading + wire reroute is a separate future capability.)",

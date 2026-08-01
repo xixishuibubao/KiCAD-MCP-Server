@@ -27,9 +27,34 @@ import logging
 import os
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
+
+from sexpdata import Symbol
 
 logger = logging.getLogger("kicad_interface")
+
+
+def _segments_intersect_point(
+    p1: Tuple[float, float], p2: Tuple[float, float],
+    p3: Tuple[float, float], p4: Tuple[float, float],
+) -> Optional[Tuple[float, float]]:
+    """Return the intersection point of two line segments, or None.
+
+    Only proper crossings (not parallel/collinear) are reported; this is a
+    standard parametric line-segment intersection.
+    """
+    x1, y1 = p1
+    x2, y2 = p2
+    x3, y3 = p3
+    x4, y4 = p4
+    denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4)
+    if abs(denom) < 1e-9:
+        return None
+    t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denom
+    u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / denom
+    if 0.0 <= t <= 1.0 and 0.0 <= u <= 1.0:
+        return (x1 + t * (x2 - x1), y1 + t * (y2 - y1))
+    return None
 
 _PASSES = ("hide_pin_names", "orient_labels")
 
@@ -272,3 +297,296 @@ class SchematicLintCommands:
                 "message": f"lint_schematic_cosmetic failed: {e}",
                 "errorDetails": traceback.format_exc(),
             }
+
+    # ------------------------------------------------------------------
+    # lint_schematic_design_rules — read-only checks derived from 经验.md
+    # ------------------------------------------------------------------
+    _DESIGN_RULES = (
+        "value_missing",
+        "power_naming",
+        "decoupling",
+        "interface",
+        "flow_direction",
+        "junction",
+        "annotation",
+    )
+
+    def lint_schematic_design_rules(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Read-only design-rule checks for a .kicad_sch, derived from 经验.md.
+
+        Returns a structured violation list — the file is never modified.
+        Each violation carries ``rule``, ``severity`` (error/warning/info),
+        ``reference`` (when applicable) and ``message``.
+        """
+        try:
+            schematic_path = params.get("schematicPath")
+            if not schematic_path:
+                return {"success": False, "message": "schematicPath is required"}
+            if not os.path.isfile(schematic_path):
+                return {"success": False, "message": f"Schematic not found: {schematic_path}"}
+
+            rules = params.get("rules") or list(self._DESIGN_RULES)
+            unknown = [r for r in rules if r not in self._DESIGN_RULES]
+            if unknown:
+                return {
+                    "success": False,
+                    "message": f"Unknown rule(s): {', '.join(unknown)}. "
+                    f"Valid: {', '.join(self._DESIGN_RULES)}",
+                }
+
+            from commands import schematic_analysis as sa
+
+            sexp = sa._load_sexp(Path(schematic_path))
+            symbols = sa._parse_symbols(sexp)
+            props = sa._parse_symbol_properties(sexp)
+            wires = sa._parse_wires(sexp)
+            labels = sa._parse_labels(sexp)
+            junctions = self._parse_junctions(sexp)
+            texts = self._parse_texts(sexp)
+
+            val_by_ref = {
+                p["reference"]: p["value"] for p in props if p["name"] == "Value"
+            }
+            violations: List[Dict[str, Any]] = []
+
+            if "value_missing" in rules:
+                violations += self._check_value_missing(symbols, val_by_ref)
+            if "power_naming" in rules:
+                violations += self._check_power_naming(labels, props)
+            if "decoupling" in rules:
+                violations += self._check_decoupling(symbols)
+            if "interface" in rules:
+                violations += self._check_interface(labels, props)
+            if "flow_direction" in rules:
+                violations += self._check_flow_direction(labels)
+            if "junction" in rules:
+                violations += self._check_junctions(wires, junctions)
+            if "annotation" in rules:
+                violations += self._check_annotation(labels, texts)
+
+            by_rule: Dict[str, int] = {}
+            for v in violations:
+                by_rule[v["rule"]] = by_rule.get(v["rule"], 0) + 1
+            return {
+                "success": True,
+                "violations": violations,
+                "summary": {"total": len(violations), "by_rule": by_rule},
+                "message": f"{len(violations)} design-rule violation(s) found.",
+            }
+        except Exception as e:
+            import traceback
+            logger.error(f"lint_schematic_design_rules failed: {e}")
+            return {
+                "success": False,
+                "message": f"lint_schematic_design_rules failed: {e}",
+                "errorDetails": traceback.format_exc(),
+            }
+
+    @staticmethod
+    def _parse_junctions(sexp_data: list) -> List[Dict[str, float]]:
+        out = []
+        for item in sexp_data:
+            if not isinstance(item, list) or not item or item[0] != Symbol("junction"):
+                continue
+            for sub in item:
+                if isinstance(sub, list) and len(sub) >= 3 and sub[0] == Symbol("at"):
+                    out.append({"x": float(sub[1]), "y": float(sub[2])})
+                    break
+        return out
+
+    @staticmethod
+    def _parse_texts(sexp_data: list) -> List[Dict[str, Any]]:
+        out = []
+        for item in sexp_data:
+            if not isinstance(item, list) or len(item) < 2 or item[0] != Symbol("text"):
+                continue
+            content = str(item[1]).strip('"') if len(item) >= 2 else ""
+            x = y = 0.0
+            for sub in item:
+                if isinstance(sub, list) and len(sub) >= 3 and sub[0] == Symbol("at"):
+                    x, y = float(sub[1]), float(sub[2])
+                    break
+            out.append({"content": content, "x": x, "y": y})
+        return out
+
+    @staticmethod
+    def _check_value_missing(symbols, val_by_ref) -> List[Dict[str, Any]]:
+        """R1: every part needs a clear value (经验.md 2.1#3)."""
+        out = []
+        placeholders = {"", "?", "~", "TBD", "TBD?"}
+        for sym in symbols:
+            ref = sym["reference"]
+            if ref.startswith("#") or ref.startswith("_TEMPLATE"):
+                continue
+            val = val_by_ref.get(ref, "")
+            if val in placeholders or val == ref:
+                out.append({
+                    "rule": "value_missing",
+                    "severity": "warning",
+                    "reference": ref,
+                    "message": f"Value is empty or placeholder '{val}' — every part needs a clear value (经验.md 2.1#3)",
+                })
+        return out
+
+    # Canonical power-rail names → known aliases (case-insensitive). Two
+    # aliases of the same rail in one sheet means an implicit net split.
+    _POWER_ALIAS_GROUPS = {
+        "3V3": {"3V3", "3.3V", "VCC33", "P3V3", "V3P3", "+3V3", "+3.3V", "VDD3V3"},
+        "5V": {"5V", "VCC5", "P5V", "+5V", "VDD5V"},
+        "12V": {"12V", "VCC12", "+12V"},
+        "GND": {"GND", "GNDD", "GNDP", "DGND", "AGND", "PGND", "VSS"},
+        "VBAT": {"VBAT", "V_BAT", "VBATT"},
+    }
+
+    @classmethod
+    def _check_power_naming(cls, labels, props) -> List[Dict[str, Any]]:
+        """R2: unify power-rail naming (经验.md 2.1#4)."""
+        names = {l["name"] for l in labels}
+        for p in props:
+            if p["name"] == "Value" and p["reference"].startswith("#PWR"):
+                if p["value"] and p["value"] not in ("?", "~"):
+                    names.add(p["value"])
+        out = []
+        for canonical, aliases in cls._POWER_ALIAS_GROUPS.items():
+            present = {n for n in names if n in aliases}
+            if len(present) > 1:
+                out.append({
+                    "rule": "power_naming",
+                    "severity": "error",
+                    "message": f"Power rail '{canonical}' has multiple aliases in use: {sorted(present)} — unify naming or nets will split (经验.md 2.1#4)",
+                })
+        return out
+
+    # IC lib_id substrings that should have local decoupling (经验.md 2.2).
+    _IC_LIB_HINTS = ("MCU", "STM", "STM32", "STM8", "ESP", "GD32", "ATmega",
+                     "ATtiny", "PIC", "RP2040", "nRF", "BLE", "LDO", "DCDC",
+                     "TPS", "RT", "AMS1117", "AMS", "MAX", "ADU", "74", "CD40")
+
+    @classmethod
+    def _check_decoupling(cls, symbols) -> List[Dict[str, Any]]:
+        """R3: every IC needs a 100nF decoupling cap within ~10 mm (经验.md 2.2)."""
+        cap_positions = []
+        for sym in symbols:
+            name = sym["lib_id"].split(":")[-1]
+            if name.startswith("C"):
+                cap_positions.append((sym["x"], sym["y"]))
+        out = []
+        for sym in symbols:
+            lib = sym["lib_id"]
+            name = lib.split(":")[-1]
+            if name.startswith(("C", "R", "L", "D", "Q", "J", "P", "K")):
+                continue
+            if not any(h in lib for h in cls._IC_LIB_HINTS):
+                continue
+            has_local = any(
+                abs(cx - sym["x"]) <= 10.0 and abs(cy - sym["y"]) <= 10.0
+                for cx, cy in cap_positions
+            )
+            if not has_local:
+                out.append({
+                    "rule": "decoupling",
+                    "severity": "warning",
+                    "reference": sym["reference"],
+                    "message": f"No decoupling capacitor within 10 mm — every IC VCC pin needs a 100nF cap nearby (经验.md 2.2)",
+                })
+        return out
+
+    @staticmethod
+    def _check_interface(labels, props) -> List[Dict[str, Any]]:
+        """R4: interface circuits need pull-ups / series resistors / ESD (经验.md 2.4)."""
+        all_names = {l["name"] for l in labels}
+        all_names |= {p["value"] for p in props if p["name"] == "Value"}
+        joined = " ".join(all_names).upper()
+        out = []
+        if "SDA" in joined and "SCL" in joined:
+            has_pull = any(
+                p["name"] == "Value" and p["reference"].startswith("R")
+                and any(s in str(p["value"]).upper() for s in ("K", "Ω", "OHM"))
+                for p in props
+            )
+            if not has_pull:
+                out.append({
+                    "rule": "interface",
+                    "severity": "warning",
+                    "message": "I2C bus detected (SDA/SCL) but no pull-up resistor found — I2C needs ~4.7kΩ pull-ups (经验.md 2.4)",
+                })
+        if "D+" in joined and "D-" in joined:
+            out.append({
+                "rule": "interface",
+                "severity": "info",
+                "message": "USB D+/D- detected — verify 22-33Ω series resistors and ESD protection (经验.md 2.4)",
+            })
+        return out
+
+    @staticmethod
+    def _check_flow_direction(labels) -> List[Dict[str, Any]]:
+        """R5: power on top, ground on bottom (经验.md 2.1#2). Info-level — full
+        flow analysis needs pin electrical types."""
+        out = []
+        power = [l for l in labels
+                 if l["name"].upper().startswith(("VCC", "VDD", "+", "VBAT"))
+                 or "3V3" in l["name"].upper() or "5V" in l["name"].upper()]
+        gnd = [l for l in labels if l["name"].upper().startswith(("GND", "VSS"))]
+        if power and gnd:
+            avg_power_y = sum(p["y"] for p in power) / len(power)
+            avg_gnd_y = sum(g["y"] for g in gnd)
+            if avg_power_y > avg_gnd_y:
+                out.append({
+                    "rule": "flow_direction",
+                    "severity": "info",
+                    "message": "Power labels sit below ground labels — convention is power on top, ground on bottom (经验.md 2.1#2)",
+                })
+        return out
+
+    @staticmethod
+    def _check_junctions(wires, junctions) -> List[Dict[str, Any]]:
+        """R6: wire crossings need a junction dot (经验.md 2.1❌)."""
+        out = []
+        n = len(wires)
+        for i in range(n):
+            for j in range(i + 1, n):
+                w1, w2 = wires[i], wires[j]
+                pt = _segments_intersect_point(w1["start"], w1["end"], w2["start"], w2["end"])
+                if pt is None:
+                    continue
+                # Endpoint touches are real connections, not crossings.
+                touch = False
+                for endp in (w1["start"], w1["end"], w2["start"], w2["end"]):
+                    if abs(endp[0] - pt[0]) < 0.01 and abs(endp[1] - pt[1]) < 0.01:
+                        touch = True
+                        break
+                if touch:
+                    continue
+                has_junction = any(
+                    abs(jc["x"] - pt[0]) < 0.3 and abs(jc["y"] - pt[1]) < 0.3
+                    for jc in junctions
+                )
+                if not has_junction:
+                    out.append({
+                        "rule": "junction",
+                        "severity": "warning",
+                        "message": f"Wire crossing at ({pt[0]:.2f}, {pt[1]:.2f}) has no junction dot — verify it is not an unintended connection (经验.md 2.1❌)",
+                    })
+        return out
+
+    @staticmethod
+    def _check_annotation(labels, texts) -> List[Dict[str, Any]]:
+        """R7: key nets should have a nearby text annotation (经验.md 2.1#5)."""
+        out = []
+        for lbl in labels:
+            name_u = lbl["name"].upper()
+            is_key = name_u.startswith(("VCC", "VDD", "VBAT", "+")) or "3V3" in name_u or "5V" in name_u
+            if not is_key:
+                continue
+            has_text = any(
+                abs(t["x"] - lbl["x"]) <= 5.0 and abs(t["y"] - lbl["y"]) <= 5.0
+                for t in texts
+            )
+            if not has_text:
+                out.append({
+                    "rule": "annotation",
+                    "severity": "info",
+                    "reference": lbl["name"],
+                    "message": f"Key net '{lbl['name']}' has no nearby text annotation — annotate voltage/current on key nodes (经验.md 2.1#5)",
+                })
+        return out

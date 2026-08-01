@@ -519,6 +519,29 @@ Netlist-safe cosmetic cleanup of a schematic, applied as raw-text edits that nev
 
 **Response fields:** `changed`, `counts` per pass, `skippedLabels` (labels not on a pin), `message`.
 
+### lint_schematic_design_rules
+
+Read-only design-rule checks for a `.kicad_sch`, derived from the hardware-engineering playbook (`经验.md`). The file is **never modified** — it returns a structured violation list, each carrying `rule`, `severity` (`error`/`warning`/`info`), `reference` (when applicable) and `message`. Use it to catch the design-stage mistakes the playbook calls out before they propagate to the board.
+
+| Parameter     | Type           | Required | Description                                                                                              |
+| ------------- | -------------- | -------- | -------------------------------------------------------------------------------------------------------- |
+| schematicPath | string         | Yes      | Path to the .kicad_sch file                                                                              |
+| rules         | array\<string\> | No       | Subset of rules to run. One or more of: `value_missing`, `power_naming`, `decoupling`, `interface`, `flow_direction`, `junction`, `annotation` (default: all) |
+
+**Rules:**
+
+| Rule           | Severity | What it checks (经验.md ref)                                                                                                  |
+| -------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `value_missing`   | warning | Every part needs a clear value — flags empty/`?`/`~`/`TBD` or value equal to reference (2.1#3)                              |
+| `power_naming`    | error   | Power-rail aliases must be unified — flags `3V3`+`VCC33`+`P3V3` (etc.) coexisting on one sheet (2.1#4)                       |
+| `decoupling`      | warning | Every IC needs a 100nF decoupling cap within 10 mm — flags ICs with no nearby `C` part (2.2)                                |
+| `interface`       | warning/info | I2C needs pull-ups; USB D+/D- needs series resistors + ESD — heuristic detection from net labels (2.4)                |
+| `flow_direction`  | info    | Power on top, ground on bottom — flags when average power-label Y > average ground-label Y (2.1#2)                          |
+| `junction`        | warning | Wire crossings need a junction dot — flags proper crossings (not endpoint touches) with no `(junction)` nearby (2.1❌)     |
+| `annotation`      | info    | Key nets (VCC/VDD/VBAT/+…) should have a nearby text annotation — flags missing notes (2.1#5)                              |
+
+**Response fields:** `violations` (list), `summary` (`total`, `by_rule` counts), `message`.
+
 ### lint_offgrid
 
 Report every off-grid connection-relevant coordinate in a schematic — wire/bus endpoints, symbol origins, label/junction/no_connect anchors — and optionally snap them (`fix: true`). KiCad's connection grid is fixed at 50 mil (1.27 mm) and junction placement uses exact matching, so one off-grid endpoint can poison junction placement for a whole sheet. Fixes are byte-exact text splices that preserve file formatting (unlike `snap_to_grid`'s whole-file rewrite). `(lib_symbols)` content (local pin definitions) and property field positions (cosmetic) are never flagged or touched. Offenders more than 0.5 mm off-grid are reported as `needsHuman` and never auto-snapped — sub-half-grid offsets round coincident points to the same grid node, preserving connectivity, while larger ones need a human decision.

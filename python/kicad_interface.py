@@ -569,6 +569,7 @@ class KiCADInterface(SchematicHandlersMixin):
             "batch_set_schematic_property_positions": self.field_layout_commands.batch_set_schematic_property_positions,
             "autoplace_schematic_fields": self.field_layout_commands.autoplace_schematic_fields,
             "lint_schematic_cosmetic": self.schematic_lint_commands.lint_schematic_cosmetic,
+            "lint_schematic_design_rules": self.schematic_lint_commands.lint_schematic_design_rules,
             "suggest_schematic_declutter": self.declutter_commands.suggest_schematic_declutter,
             # Batch schematic authoring commands
             "batch_add_components": self.batch_commands.batch_add_components,
