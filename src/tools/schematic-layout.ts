@@ -144,15 +144,20 @@ export function registerSchematicLayoutTools(server: McpServer, callKicadScript:
     "Read-only design-rule checks for a .kicad_sch, derived from the hardware-engineering playbook. " +
       "Never modifies the file. Rules: value_missing (every part needs a clear value), " +
       "power_naming (unify power-rail aliases like 3V3/VCC33/P3V3), decoupling (every IC needs a 100nF cap within 10mm), " +
-      "interface (I2C pull-ups, USB series resistors/ESD), flow_direction (power on top, ground on bottom), " +
+      "decoupling_precise (per-VCC-pin check using PinLocator electrical types + world coords), " +
+      "interface (I2C pull-ups, USB series resistors/ESD), " +
+      "interface_precise (net-topology verification of pull-ups/series/ESD), " +
+      "flow_direction (power on top, ground on bottom), " +
+      "flow_direction_precise (per-pin left→right flow check using pin electrical types), " +
       "junction (wire crossings need a dot), annotation (key nets should be annotated). " +
       "Returns a structured violation list with severity (error/warning/info).",
     {
       schematicPath: z.string().describe("Path to the .kicad_sch file"),
       rules: z
         .array(z.enum([
-          "value_missing", "power_naming", "decoupling", "interface",
-          "flow_direction", "junction", "annotation",
+          "value_missing", "power_naming", "decoupling", "decoupling_precise",
+          "interface", "interface_precise", "flow_direction",
+          "flow_direction_precise", "junction", "annotation",
         ]))
         .optional()
         .describe("Subset of rules to run (default: all)"),

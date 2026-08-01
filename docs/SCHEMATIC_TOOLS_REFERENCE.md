@@ -526,7 +526,7 @@ Read-only design-rule checks for a `.kicad_sch`, derived from the hardware-engin
 | Parameter     | Type           | Required | Description                                                                                              |
 | ------------- | -------------- | -------- | -------------------------------------------------------------------------------------------------------- |
 | schematicPath | string         | Yes      | Path to the .kicad_sch file                                                                              |
-| rules         | array\<string\> | No       | Subset of rules to run. One or more of: `value_missing`, `power_naming`, `decoupling`, `interface`, `flow_direction`, `junction`, `annotation` (default: all) |
+| rules         | array\<string\> | No       | Subset of rules to run. One or more of: `value_missing`, `power_naming`, `decoupling`, `decoupling_precise`, `interface`, `interface_precise`, `flow_direction`, `flow_direction_precise`, `junction`, `annotation` (default: all) |
 
 **Rules:**
 
@@ -534,9 +534,12 @@ Read-only design-rule checks for a `.kicad_sch`, derived from the hardware-engin
 | -------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | `value_missing`   | warning | Every part needs a clear value — flags empty/`?`/`~`/`TBD` or value equal to reference (2.1#3)                              |
 | `power_naming`    | error   | Power-rail aliases must be unified — flags `3V3`+`VCC33`+`P3V3` (etc.) coexisting on one sheet (2.1#4)                       |
-| `decoupling`      | warning | Every IC needs a 100nF decoupling cap within 10 mm — flags ICs with no nearby `C` part (2.2)                                |
-| `interface`       | warning/info | I2C needs pull-ups; USB D+/D- needs series resistors + ESD — heuristic detection from net labels (2.4)                |
-| `flow_direction`  | info    | Power on top, ground on bottom — flags when average power-label Y > average ground-label Y (2.1#2)                          |
+| `decoupling`      | warning | Every IC needs a 100nF decoupling cap within 10 mm — flags ICs with no nearby `C` part (heuristic by IC centroid) (2.2) |
+| `decoupling_precise` | warning | Per-VCC-pin check using PinLocator electrical types (`power_in`/`power_out`) + world coords — flags the specific power pin missing local decoupling (2.2) |
+| `interface`       | warning/info | I2C needs pull-ups; USB D+/D- needs series resistors + ESD — heuristic detection from net labels (2.4) |
+| `interface_precise` | warning/info | Net-topology verification (via `get_net_connections`) that I2C pull-ups / USB series resistors + ESD are actually attached to the bus nets (2.4) |
+| `flow_direction`  | info    | Power on top, ground on bottom — flags when average power-label Y > average ground-label Y (heuristic) (2.1#2) |
+| `flow_direction_precise` | info | Per-pin left→right flow check using pin electrical types (`input`/`output`/`bidirectional`) + world coords vs symbol centroid — flags input pins on the right / output pins on the left (2.1#2) |
 | `junction`        | warning | Wire crossings need a junction dot — flags proper crossings (not endpoint touches) with no `(junction)` nearby (2.1❌)     |
 | `annotation`      | info    | Key nets (VCC/VDD/VBAT/+…) should have a nearby text annotation — flags missing notes (2.1#5)                              |
 

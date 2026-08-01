@@ -305,8 +305,11 @@ class SchematicLintCommands:
         "value_missing",
         "power_naming",
         "decoupling",
+        "decoupling_precise",
         "interface",
+        "interface_precise",
         "flow_direction",
+        "flow_direction_precise",
         "junction",
         "annotation",
     )
@@ -355,10 +358,16 @@ class SchematicLintCommands:
                 violations += self._check_power_naming(labels, props)
             if "decoupling" in rules:
                 violations += self._check_decoupling(symbols)
+            if "decoupling_precise" in rules:
+                violations += self._check_decoupling_precise(symbols, schematic_path)
             if "interface" in rules:
                 violations += self._check_interface(labels, props)
+            if "interface_precise" in rules:
+                violations += self._check_interface_precise(labels, schematic_path)
             if "flow_direction" in rules:
                 violations += self._check_flow_direction(labels)
+            if "flow_direction_precise" in rules:
+                violations += self._check_flow_direction_precise(symbols, schematic_path)
             if "junction" in rules:
                 violations += self._check_junctions(wires, junctions)
             if "annotation" in rules:
@@ -588,5 +597,199 @@ class SchematicLintCommands:
                     "severity": "info",
                     "reference": lbl["name"],
                     "message": f"Key net '{lbl['name']}' has no nearby text annotation — annotate voltage/current on key nodes (经验.md 2.1#5)",
+                })
+        return out
+
+    # ------------------------------------------------------------------
+    # Precise variants — use PinLocator pin electrical types + world coords
+    # (经验.md deepening). Fall back to a note when PinLocator is unavailable.
+    # ------------------------------------------------------------------
+    _POWER_PIN_TYPES = {"power_in", "power_out", "power_in_out", "passive"}
+
+    @classmethod
+    def _check_decoupling_precise(cls, symbols, schematic_path) -> List[Dict[str, Any]]:
+        """R3-precise: every IC power pin needs a 100nF cap within 10 mm.
+
+        Uses PinLocator to identify power_in/power_out pins by electrical type
+        and locate them in world space, so the check is per-VCC-pin rather
+        than per-IC-centroid (经验.md 2.2).
+        """
+        out = []
+        try:
+            from commands.pin_locator import PinLocator
+            locator = PinLocator()
+        except Exception as e:
+            return [{
+                "rule": "decoupling_precise",
+                "severity": "info",
+                "message": f"PinLocator unavailable ({e}); decoupling_precise skipped — use 'decoupling' heuristic instead",
+            }]
+
+        cap_positions = [(s["x"], s["y"]) for s in symbols
+                         if s["reference"].startswith("C")]
+        for sym in symbols:
+            ref = sym["reference"]
+            name = sym["lib_id"].split(":")[-1]
+            if ref.startswith(("#", "_TEMPLATE")):
+                continue
+            if name.startswith(("C", "R", "L", "D", "Q", "J", "P", "K")):
+                continue
+            if not any(h in sym["lib_id"] for h in cls._IC_LIB_HINTS):
+                continue
+            try:
+                pins = locator.get_symbol_pins(Path(schematic_path), sym["lib_id"])
+            except Exception:
+                pins = {}
+            if not pins:
+                continue
+            for pin_num, pin in pins.items():
+                if pin.get("type") not in ("power_in", "power_out"):
+                    continue
+                loc = locator.get_pin_location(Path(schematic_path), ref, pin_num)
+                if not loc:
+                    continue
+                px, py = loc[0], loc[1]
+                has_local = any(
+                    abs(cx - px) <= 10.0 and abs(cy - py) <= 10.0
+                    for cx, cy in cap_positions
+                )
+                if not has_local:
+                    out.append({
+                        "rule": "decoupling_precise",
+                        "severity": "warning",
+                        "reference": f"{ref}.{pin_num}",
+                        "message": f"Power pin {ref}/{pin_num} ({pin.get('name','?')}) has no 100nF decoupling cap within 10 mm — every IC VCC pin needs local decoupling (经验.md 2.2)",
+                    })
+        return out
+
+    @staticmethod
+    def _check_flow_direction_precise(symbols, schematic_path) -> List[Dict[str, Any]]:
+        """R5-precise: input pins on the right / output pins on the left of an
+        IC body violate the left→right signal-flow convention (经验.md 2.1#2).
+
+        Uses PinLocator pin electrical types + world coordinates against the
+        symbol centroid, so this is a real per-pin flow check rather than the
+        label-Y heuristic in ``flow_direction``.
+        """
+        out = []
+        try:
+            from commands.pin_locator import PinLocator
+            locator = PinLocator()
+        except Exception as e:
+            return [{
+                "rule": "flow_direction_precise",
+                "severity": "info",
+                "message": f"PinLocator unavailable ({e}); flow_direction_precise skipped — use 'flow_direction' heuristic instead",
+            }]
+
+        for sym in symbols:
+            ref = sym["reference"]
+            name = sym["lib_id"].split(":")[-1]
+            if ref.startswith(("#", "_TEMPLATE")):
+                continue
+            if name.startswith(("C", "R", "L", "D", "Q", "J", "P", "K")):
+                continue
+            cx, cy = sym["x"], sym["y"]
+            try:
+                pins = locator.get_symbol_pins(Path(schematic_path), sym["lib_id"])
+            except Exception:
+                continue
+            for pin_num, pin in pins.items():
+                ptype = pin.get("type", "")
+                if ptype not in ("input", "output", "bidirectional"):
+                    continue
+                loc = locator.get_pin_location(Path(schematic_path), ref, pin_num)
+                if not loc:
+                    continue
+                px, py = loc[0], loc[1]
+                if ptype in ("input", "bidirectional") and px > cx + 0.5:
+                    out.append({
+                        "rule": "flow_direction_precise",
+                        "severity": "info",
+                        "reference": f"{ref}.{pin_num}",
+                        "message": f"Input pin {ref}/{pin_num} ({pin.get('name','?')}) is on the right side of the body — convention is signal flow left→right, inputs on the left (经验.md 2.1#2)",
+                    })
+                elif ptype == "output" and px < cx - 0.5:
+                    out.append({
+                        "rule": "flow_direction_precise",
+                        "severity": "info",
+                        "reference": f"{ref}.{pin_num}",
+                        "message": f"Output pin {ref}/{pin_num} ({pin.get('name','?')}) is on the left side of the body — convention is signal flow left→right, outputs on the right (经验.md 2.1#2)",
+                    })
+        return out
+
+    @staticmethod
+    def _check_interface_precise(labels, schematic_path) -> List[Dict[str, Any]]:
+        """R4-precise: verify interface pull-ups / series resistors / ESD using
+        net topology (get_net_connections) rather than mere net-name presence
+        (经验.md 2.4). Falls back to a note when the connection analyser is
+        unavailable.
+        """
+        out = []
+        try:
+            from commands.schematic import SchematicManager
+            from commands.connection_schematic import ConnectionManager
+            sch = SchematicManager.load_schematic(str(schematic_path))
+            conn = ConnectionManager()
+        except Exception as e:
+            return [{
+                "rule": "interface_precise",
+                "severity": "info",
+                "message": f"Connection analyser unavailable ({e}); interface_precise skipped — use 'interface' heuristic instead",
+            }]
+
+        label_names = {l["name"] for l in labels}
+
+        def _net_has_resistor(net_name: str) -> bool:
+            try:
+                conns = conn.get_net_connections(sch, net_name, Path(schematic_path))
+            except Exception:
+                return False
+            for c in conns:
+                comp = str(c.get("component", ""))
+                if comp.startswith("R"):
+                    return True
+            return False
+
+        def _net_has_esd(net_name: str) -> bool:
+            try:
+                conns = conn.get_net_connections(sch, net_name, Path(schematic_path))
+            except Exception:
+                return False
+            for c in conns:
+                comp = str(c.get("component", ""))
+                if comp.startswith(("D", "TVS", "U")):
+                    return True
+            return False
+
+        # I2C: SDA + SCL both need pull-ups.
+        i2c_pairs = []
+        sda = next((n for n in label_names if n.upper() == "SDA"), None)
+        scl = next((n for n in label_names if n.upper() == "SCL"), None)
+        if sda and scl:
+            i2c_pairs.append((sda, scl))
+        for sda_n, scl_n in i2c_pairs:
+            if not _net_has_resistor(sda_n) or not _net_has_resistor(scl_n):
+                out.append({
+                    "rule": "interface_precise",
+                    "severity": "warning",
+                    "message": f"I2C bus {sda_n}/{scl_n} is missing a pull-up resistor on one or both lines — I2C needs ~4.7kΩ pull-ups on SDA and SCL (经验.md 2.4)",
+                })
+
+        # USB: D+ / D- need series resistors + ESD.
+        dp = next((n for n in label_names if n.upper() in ("D+", "DP")), None)
+        dm = next((n for n in label_names if n.upper() in ("D-", "DM")), None)
+        if dp and dm:
+            if not _net_has_resistor(dp) or not _net_has_resistor(dm):
+                out.append({
+                    "rule": "interface_precise",
+                    "severity": "warning",
+                    "message": f"USB {dp}/{dm} is missing a series resistor on one or both lines — USB needs 22-33Ω series resistors (经验.md 2.4)",
+                })
+            if not _net_has_esd(dp) and not _net_has_esd(dm):
+                out.append({
+                    "rule": "interface_precise",
+                    "severity": "info",
+                    "message": f"USB {dp}/{dm} has no ESD protection detected on either line — add a TVS/ESD diode (经验.md 2.4)",
                 })
         return out
