@@ -51,8 +51,8 @@
 ```bash
 git clone https://github.com/mixelpixx/KiCAD-MCP-Server.git
 cd KiCAD-MCP-Server
-npm install
-npm run build
+pnpm install
+pnpm run build
 ```
 
 4. 配置 AI 客户端 — 参见 [平台指南](../docs/PLATFORM_GUIDE.md)

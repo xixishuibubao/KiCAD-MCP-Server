@@ -43,16 +43,16 @@ git clone https://github.com/mixelpixx/KiCAD-MCP-Server.git
 cd kicad-mcp-server
 
 # Install Node.js dependencies
-npm install
+pnpm install
 
 # Install Python dependencies
 pip3 install -r requirements-dev.txt
 
 # Build TypeScript
-npm run build
+pnpm run build
 
 # Run tests
-npm test
+pnpm test
 pytest
 ```
 
@@ -68,16 +68,16 @@ git clone https://github.com/mixelpixx/KiCAD-MCP-Server.git
 cd kicad-mcp-server
 
 # Install Node.js dependencies
-npm install
+pnpm install
 
 # Install Python dependencies
 pip install -r requirements-dev.txt
 
 # Build TypeScript
-npm run build
+pnpm run build
 
 # Run tests
-npm test
+pnpm test
 pytest
 ```
 
@@ -94,16 +94,16 @@ git clone https://github.com/mixelpixx/KiCAD-MCP-Server.git
 cd kicad-mcp-server
 
 # Install Node.js dependencies
-npm install
+pnpm install
 
 # Install Python dependencies
 pip3 install -r requirements-dev.txt
 
 # Build TypeScript
-npm run build
+pnpm run build
 
 # Run tests
-npm test
+pnpm test
 pytest
 ```
 
@@ -198,10 +198,10 @@ git checkout -b feature/your-feature-name
 
 ```bash
 # Build TypeScript
-npm run build
+pnpm run build
 
 # Run TypeScript linter
-npm run lint
+pnpm run lint
 
 # Run Python formatter
 black python/
@@ -210,7 +210,7 @@ black python/
 mypy python/
 
 # Run all tests
-npm test
+pnpm test
 pytest
 
 # Run specific test file
@@ -257,11 +257,11 @@ The project has two test suites:
 
 ```bash
 # TypeScript tests (Vitest)
-npm run test:ts            # one-shot run
-npm run test:ts:watch      # watch mode
+pnpm run test:ts            # one-shot run
+pnpm run test:ts:watch      # watch mode
 
 # Run both TS and Python suites
-npm test
+pnpm test
 
 # Python tests only
 pytest

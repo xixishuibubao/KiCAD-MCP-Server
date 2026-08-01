@@ -268,8 +268,8 @@ elif command == "my_new_tool":
 ### Step 5: Build and Test
 
 ```bash
-npm run build          # Compile TypeScript
-npm run test:py        # Run Python tests
+pnpm run build          # Compile TypeScript
+pnpm run test:py        # Run Python tests
 ```
 
 ---
@@ -294,7 +294,7 @@ Key test files:
 
 ### Manual Testing
 
-1. Build the server: `npm run build`
+1. Build the server: `pnpm run build`
 2. Configure in Claude Desktop or Claude Code
 3. Test tools interactively through your MCP client
 

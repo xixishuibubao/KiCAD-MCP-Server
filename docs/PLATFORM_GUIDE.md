@@ -79,7 +79,7 @@ Python: /usr/bin/python3
 1. Install KiCAD 9.0 from the official `.dmg` installer
 2. Install Node.js (e.g. via Homebrew or nvm)
 3. Clone repository
-4. Run `npm install && npm run build`
+4. Run `pnpm install && pnpm run build`
 5. Run `setup-macos.sh`:
    - `bash setup-macos.sh --verify` — check prerequisites and detected paths
    - `bash setup-macos.sh --dry-run` — preview the merged Claude Desktop config
@@ -339,7 +339,7 @@ python3 -c "import pcbnew; print(pcbnew.GetBuildVersion())"
 
 ```bash
 cd /home/username/KiCAD-MCP-Server
-npm test
+pnpm test
 pytest tests/
 ```
 
@@ -556,10 +556,10 @@ cd ~/KiCAD-MCP-Server
 code .  # Open in VSCode
 
 # Watch mode for TypeScript
-npm run watch
+pnpm run watch
 
 # Run tests in another terminal
-npm test
+pnpm test
 
 # Test Python changes
 python3 python/kicad_interface.py
@@ -582,10 +582,10 @@ cd C:\Users\username\KiCAD-MCP-Server
 code .  # Open in VSCode
 
 # Watch mode for TypeScript
-npm run watch
+pnpm run watch
 
 # Run tests in another PowerShell window
-npm test
+pnpm test
 
 # Test Python changes
 & "C:\Program Files\KiCad\9.0\bin\python.exe" python\kicad_interface.py
@@ -649,7 +649,7 @@ npm test
 ### Moving to/from macOS
 
 1. Clone repository on the target machine
-2. Run `npm install && npm run build`
+2. Run `pnpm install && pnpm run build`
 3. Run `bash setup-macos.sh --apply` (to macOS) or follow the target platform's setup
 4. No project file changes needed
 

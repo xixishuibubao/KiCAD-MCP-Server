@@ -319,7 +319,7 @@ python3 -c "import sys; sys.path.append('/usr/lib/kicad/lib/python3/dist-package
 
 ```bash
 cd /path/to/KiCAD-MCP-Server
-npm run build
+pnpm run build
 ls -lh dist/index.js
 ```
 

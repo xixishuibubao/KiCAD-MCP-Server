@@ -51,8 +51,8 @@ Beschreibe was du bauen möchtest — und lass die KI die EDA-Arbeit übernehmen
 ```bash
 git clone https://github.com/mixelpixx/KiCAD-MCP-Server.git
 cd KiCAD-MCP-Server
-npm install
-npm run build
+pnpm install
+pnpm run build
 ```
 
 4. KI-Client konfigurieren — siehe [Plattform-Anleitung](../docs/PLATFORM_GUIDE.md)

@@ -113,7 +113,7 @@ and per-user KiCAD installs:
 
 ### Issue 3: Node.js Not Found
 
-**Symptom:** Cannot run `npm install` or `npm run build`
+**Symptom:** Cannot run `pnpm install` or `pnpm run build`
 
 **Solution:**
 
@@ -121,7 +121,7 @@ and per-user KiCAD installs:
 
    ```powershell
    node --version
-   npm --version
+   pnpm --version
    ```
 
 2. **If not installed:**
@@ -139,7 +139,7 @@ and per-user KiCAD installs:
 
 ### Issue 4: Build Fails with TypeScript Errors
 
-**Symptom:** `npm run build` shows TypeScript compilation errors
+**Symptom:** `pnpm run build` shows TypeScript compilation errors
 
 **Solution:**
 
@@ -148,8 +148,8 @@ and per-user KiCAD installs:
    ```powershell
    Remove-Item node_modules -Recurse -Force
    Remove-Item package-lock.json -Force
-   npm install
-   npm run build
+   pnpm install
+   pnpm run build
    ```
 
 2. **Check Node.js version:**
@@ -160,9 +160,9 @@ and per-user KiCAD installs:
 
 3. **If still failing:**
    ```powershell
-   # Try with legacy peer deps
-   npm install --legacy-peer-deps
-   npm run build
+   # pnpm handles peer dependencies differently and does not need --legacy-peer-deps
+   pnpm install
+   pnpm run build
    ```
 
 ---
@@ -353,15 +353,15 @@ SUCCESS!
 
 ```powershell
 node --version  # Should be v18.0.0+
-npm --version   # Should be 9.0.0+
+pnpm --version   # Should be 9.0.0+
 ```
 
 ### Test 3: Build Project
 
 ```powershell
 cd C:\Users\YourName\KiCAD-MCP-Server
-npm install
-npm run build
+pnpm install
+pnpm run build
 Test-Path .\dist\index.js  # Should output: True
 ```
 
@@ -493,7 +493,7 @@ When everything works, you should have:
       `C:\Program Files\KiCad\10.0` or `%LOCALAPPDATA%\Programs\KiCad\10.0`
 - [ ] Node.js 18+ installed and in PATH
 - [ ] Python can import pcbnew successfully
-- [ ] `npm run build` completes without errors
+- [ ] `pnpm run build` completes without errors
 - [ ] `dist\index.js` file exists
 - [ ] MCP config file created with correct paths
 - [ ] Server starts without immediate crash

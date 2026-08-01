@@ -233,8 +233,8 @@ const DEFAULT_LOG_DIR = join(os.homedir(), ".kicad-mcp", "logs");
 - [ ] Install KiCAD 9.0 from official PPA
 - [ ] Install Node.js 18+ from NodeSource
 - [ ] Clone repository
-- [ ] Run `npm install`
-- [ ] Run `npm run build`
+- [ ] Run `pnpm install`
+- [ ] Run `pnpm run build`
 - [ ] Configure MCP settings (Cline)
 - [ ] Test: Create project
 - [ ] Test: Place components

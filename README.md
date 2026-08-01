@@ -102,9 +102,9 @@ identity mid-session.
 
 - `pre-commit run --all-files` (black, isort, prettier, flake8, mypy, eslint)
   is now a real CI gate, which is what CONTRIBUTING has always claimed.
-- `npm run lint` used to run `black` in **write** mode against whatever
+- `pnpm run lint` used to run `black` in **write** mode against whatever
   `black` was on `PATH`, silently reformatting your working tree with a
-  version that disagreed with CI. It now checks only; `npm run format:py` is
+  version that disagreed with CI. It now checks only; `pnpm run format:py` is
   the write path.
 - The README's tool count is pinned to the registry by a test, so it
   self-corrects instead of drifting.
@@ -668,7 +668,7 @@ See [Freerouting Guide](docs/FREEROUTING_GUIDE.md) for setup and usage.
 **Node.js 18 or Higher**
 
 - Download from [nodejs.org](https://nodejs.org/)
-- Verify: `node --version` and `npm --version`
+- Verify: `node --version` and `pnpm --version`
 
 **Python 3.9 or Higher**
 
@@ -714,9 +714,9 @@ sudo apt-get install -y nodejs
 # Clone and build
 git clone https://github.com/mixelpixx/KiCAD-MCP-Server.git
 cd KiCAD-MCP-Server
-npm install
+pnpm install
 pip3 install -r requirements.txt
-npm run build
+pnpm run build
 
 # Verify
 python3 -c "import pcbnew; print(pcbnew.GetBuildVersion())"
@@ -769,9 +769,9 @@ cd KiCAD-MCP-Server
 source venv/bin/activate
 
 # Install dependencies
-npm install
+pnpm install
 pip install -r requirements.txt
-npm run build
+pnpm run build
 ```
 
 **Note:** The `--system-site-packages` flag is required to access KiCAD's `pcbnew` module from the virtual environment.
@@ -1418,37 +1418,37 @@ How many Basic parts are available?
 
 ```bash
 # Install dependencies
-npm install
+pnpm install
 pip3 install -r requirements.txt
 
 # Build TypeScript
-npm run build
+pnpm run build
 
 # Watch mode for development
-npm run dev
+pnpm run dev
 ```
 
 ### Running Tests
 
 ```bash
 # TypeScript tests
-npm run test:ts
+pnpm run test:ts
 
 # Python tests
-npm run test:py
+pnpm run test:py
 
 # All tests with coverage
-npm run test:coverage
+pnpm run test:coverage
 ```
 
 ### Linting and Formatting
 
 ```bash
 # Lint TypeScript and Python
-npm run lint
+pnpm run lint
 
 # Format code
-npm run format
+pnpm run format
 ```
 
 ## Troubleshooting
