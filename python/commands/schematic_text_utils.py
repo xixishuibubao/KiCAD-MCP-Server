@@ -107,6 +107,21 @@ def _extract_property_visible(block_text: str, property_name: str) -> bool:
     return "(hide yes)" not in prop_sub and "(hide)" not in prop_sub
 
 
+def _extract_property_do_not_autoplace(block_text: str, property_name: str) -> bool:
+    """True if the named property carries a ``(do_not_autoplace yes)`` token.
+
+    Used by autoplace to skip fields the user has explicitly locked in place.
+    """
+    m = re.search(r'\(property\s+"' + re.escape(property_name) + r'"', block_text)
+    if not m:
+        return False
+    end = _find_matching_paren(block_text, m.start())
+    if end < 0:
+        return False
+    prop_sub = block_text[m.start() : end + 1]
+    return re.search(r'\(do_not_autoplace\s+yes\)', prop_sub) is not None
+
+
 def _get_sheet_usable_area(schematic_path) -> Tuple[float, float, float, float]:
     """Return (left, top, right, bottom) usable bounds in mm for the sheet's paper size."""
     border = 12.7

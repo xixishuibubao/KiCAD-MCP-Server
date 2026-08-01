@@ -978,6 +978,11 @@ class DynamicSymbolLoader:
             else:
                 dx, dy, text_ang, eff = fallback_dx, fallback_dy, fallback_angle, _DEFAULT_EFFECTS
             rdx, rdy = self._rotate_offset(dx, dy, angle)
+            # (mirror y) negates the screen-X axis (see wire_dragger.pin_world_xy),
+            # applied after rotation — without this a mirrored instance's fields
+            # land on the wrong side of the body.
+            if mirror_y:
+                rdx = -rdx
             return round(x + rdx, 3), round(y + rdy, 3), text_ang, eff
 
         ref_x, ref_y, ref_a, ref_eff = _prop_at("Reference", 2.032, 0, 0)

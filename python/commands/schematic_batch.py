@@ -95,7 +95,7 @@ class SchematicBatchCommands:
             components = params.get("components", [])
             origin_x = params.get("origin_x", 0) or 0
             origin_y = params.get("origin_y", 0) or 0
-            auto_position_fields = params.get("auto_position_fields", True)
+            auto_position_fields = params.get("auto_position_fields", "auto")
 
             if not schematic_path:
                 return {"success": False, "message": "schematicPath is required"}
@@ -170,7 +170,7 @@ class SchematicBatchCommands:
                     block_text, block_start, block_end = _find_placed_symbol_block(
                         raw_content, reference
                     )
-                    if auto_position_fields and block_text:
+                    if str(auto_position_fields).lower() in ("true", "auto") and block_text:
                         cx, cy = _snap(x), _snap(y)
                         new_block = block_text
                         for prop, px, py, pa in _field_positions_for_pins(cx, cy, all_pins):

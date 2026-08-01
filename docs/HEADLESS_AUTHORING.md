@@ -213,6 +213,35 @@ junction, or label anchor:
 3. **`autoplace_schematic_fields`** — move Reference/Value fields off the
    body and clear of net labels.
 
+**Field-overlap pipeline (2026-08 enhancement):** the three passes above are
+now wired together so headless authoring produces readable sheets by default:
+
+- **`autoPositionFields` tri-state** (`auto` / `true` / `false`, default
+  `auto`) on `add_schematic_component`, `rotate_schematic_component`, and
+  `batch_add_components`. After place/rotate, `auto` and `true` invoke
+  `autoplace_schematic_fields` for the affected references, so Reference/Value
+  land outside the body without an extra call. `false` preserves the legacy
+  library-offset placement.
+- **Rotate/mirror recomputes field positions** from library defaults using the
+  same forward transform as pins (Y-flip → rotate → mirror → translate), so
+  fields follow the rotated body instead of staying at pre-rotation absolute
+  coordinates. Text angle is normalised to KiCad's keep-upright convention
+  (180→0, 270→90). Fields marked `(do_not_autoplace yes)` are never moved.
+- **Graphics-aware body bbox** — autoplace sizes the body from the union of
+  real graphics (rectangle/circle/polyline/arc) and the pin envelope, so
+  wide-body ICs are no longer treated as narrow and fields aren't dropped onto
+  the body.
+- **Collision retry** — if every side collides at the requested clearance,
+  autoplace grows the spacing by one grid per pass (up to 4 passes) before
+  falling back; components that still can't be placed cleanly are returned in
+  `unresolved` for review.
+- **`find_overlapping_elements` now reports `overlappingFields`** —
+  `field_on_own_body`, `field_on_other_body`, and `field_on_field` — using the
+  same graphics-aware body bbox. Hidden fields (`hide` / `(hide yes)`) are
+  skipped. Label overlap detection is bounded to `(label)` and
+  `(global_label)` net anchors; `hierarchical_label` and sheet pins are
+  inter-sheet connection points, not net-name declarations, and are excluded.
+
 **Discipline:** prove zero connectivity drift with a golden-netlist diff —
 `kicad-cli sch export netlist --format kicadxml` on the root sheet before
 and after, comparing net → {REF.PIN} sets.

@@ -140,6 +140,104 @@ def _parse_symbols(sexp_data: list) -> List[Dict[str, Any]]:
     return symbols
 
 
+def _parse_symbol_properties(sexp_data: list) -> List[Dict[str, Any]]:
+    """Parse every placed property field on each symbol instance.
+
+    Returns a flat list of dicts:
+        {reference, name, value, x, y, angle, visible}
+    Only top-level ``(property ...)`` children of a placed ``(symbol ...)``
+    block are returned (lib_symbols definitions are not included).
+    """
+    out: List[Dict[str, Any]] = []
+    for item in sexp_data:
+        if not isinstance(item, list) or len(item) < 2 or item[0] != Symbol("symbol"):
+            continue
+        reference = ""
+        # First pass: find the Reference property to tag entries with.
+        for sub in item:
+            if (
+                isinstance(sub, list)
+                and len(sub) >= 3
+                and sub[0] == Symbol("property")
+                and str(sub[1]).strip('"') == "Reference"
+            ):
+                reference = str(sub[2]).strip('"')
+                break
+        if not reference:
+            continue
+        for sub in item:
+            if not (isinstance(sub, list) and len(sub) >= 3 and sub[0] == Symbol("property")):
+                continue
+            name = str(sub[1]).strip('"')
+            value = str(sub[2]).strip('"')
+            x = y = 0.0
+            angle = 0.0
+            visible = True
+            for p in sub:
+                if isinstance(p, list) and len(p) >= 3 and p[0] == Symbol("at"):
+                    x = float(p[1])
+                    y = float(p[2])
+                    if len(p) >= 4:
+                        angle = float(p[3])
+                elif isinstance(p, list) and p and p[0] == Symbol("effects"):
+                    # Hidden if effects contains a bare ``hide`` Symbol (KiCad 6
+                    # style: ``(effects ... hide)``) or a ``(hide yes)`` list
+                    # (KiCad 10 style). Hidden fields don't cause visual overlap.
+                    for e in p:
+                        if e == Symbol("hide"):
+                            visible = False
+                            break
+                        if isinstance(e, list) and e and e[0] == Symbol("hide"):
+                            visible = False
+                            break
+            # A top-level (hide yes) on the property also hides it.
+            for p in sub:
+                if (
+                    isinstance(p, list)
+                    and p
+                    and p[0] == Symbol("hide")
+                    and len(p) >= 2
+                    and str(p[1]) == "yes"
+                ):
+                    visible = False
+            out.append(
+                {
+                    "reference": reference,
+                    "name": name,
+                    "value": value,
+                    "x": x,
+                    "y": y,
+                    "angle": angle,
+                    "visible": visible,
+                }
+            )
+    return out
+
+
+def _estimate_text_bbox(
+    x: float, y: float, text: str, angle: float = 0.0, char_w: float = 0.75, h: float = 1.27
+) -> Dict[str, float]:
+    """Estimate a schematic text field's AABB from its anchor point.
+
+    Uses the same width heuristic as autoplace (len * 0.75 mm) and the default
+    1.27 mm text height. The anchor is treated as the text centre (KiCad property
+    ``(at)`` is the justification anchor; treating it as the centre is a close
+    approximation for overlap detection). Vertical text (90/270) swaps width
+    and height.
+    """
+    w = max(len(str(text)), 1) * char_w
+    half_w = w / 2.0
+    half_h = h / 2.0
+    if angle in (90.0, 270.0, -90.0, -270.0):
+        half_w, half_h = half_h, half_w
+    return (
+        x - half_w,
+        y - half_h,
+        x + half_w,
+        y + half_h,
+    )
+
+
 def _parse_lib_symbol_graphics(symbol_def: list) -> List[Tuple[float, float]]:
     """
     Parse graphical body elements from a lib_symbol definition and return
@@ -449,22 +547,29 @@ def _compute_symbol_bbox_direct(
 
 def find_overlapping_elements(schematic_path: Path, tolerance: float = 0.5) -> Dict[str, Any]:
     """
-    Detect spatially overlapping symbols, wires, and labels.
+    Detect spatially overlapping symbols, wires, labels, and fields.
 
     Args:
         schematic_path: Path to .kicad_sch file
         tolerance: Distance threshold in mm for label proximity and wire collinearity checks. Symbol overlap uses bounding-box intersection.
 
-    Returns dict: {overlappingSymbols, overlappingLabels, overlappingWires, totalOverlaps}
+    Returns dict: {overlappingSymbols, overlappingLabels, overlappingWires, overlappingFields, totalOverlaps}
+
+    Boundary: "labels" covers only local ``(label)`` and ``(global_label)`` net
+    anchors. Hierarchical labels (``hierarchical_label``) and sheet pins are
+    inter-sheet connection points, not net-name declarations, and are
+    intentionally excluded from label-overlap detection.
     """
     sexp_data = _load_sexp(schematic_path)
     symbols = _parse_symbols(sexp_data)
     wires = _parse_wires(sexp_data)
     labels = _parse_labels(sexp_data)
+    properties = _parse_symbol_properties(sexp_data)
 
     overlapping_symbols = []
     overlapping_labels = []
     overlapping_wires = []
+    overlapping_fields = []
 
     lib_defs = _extract_lib_symbols(sexp_data)
 
@@ -551,12 +656,72 @@ def find_overlapping_elements(schematic_path: Path, tolerance: float = 0.5) -> D
             if overlap:
                 overlapping_wires.append(overlap)
 
-    total = len(overlapping_symbols) + len(overlapping_labels) + len(overlapping_wires)
+    # --- Field overlap: visible property fields vs. symbol bodies and each other ---
+    # Only visible fields cause visual overlap; hidden ones (Footprint/Datasheet
+    # with (hide yes)) are skipped. A field is flagged when it overlaps its own
+    # symbol body (text-on-body) or another symbol's body or another field.
+    sym_bbox_by_ref = {
+        sym["reference"]: bbox for sym, bbox in symbol_bboxes if sym["reference"]
+    }
+    visible_props = [p for p in properties if p.get("visible", True)]
+    for idx, prop in enumerate(visible_props):
+        p_bb = _estimate_text_bbox(prop["x"], prop["y"], prop["value"], prop["angle"])
+        ref = prop["reference"]
+        # Field vs. its own symbol body
+        own_bb = sym_bbox_by_ref.get(ref)
+        if own_bb is not None and _aabb_overlap(p_bb, own_bb):
+            overlapping_fields.append(
+                {
+                    "type": "field_on_own_body",
+                    "reference": ref,
+                    "property": prop["name"],
+                    "value": prop["value"],
+                    "position": {"x": prop["x"], "y": prop["y"]},
+                }
+            )
+        # Field vs. other symbols' bodies
+        for other_ref, other_bb in sym_bbox_by_ref.items():
+            if other_ref == ref or other_bb is None:
+                continue
+            if _aabb_overlap(p_bb, other_bb):
+                overlapping_fields.append(
+                    {
+                        "type": "field_on_other_body",
+                        "reference": ref,
+                        "property": prop["name"],
+                        "value": prop["value"],
+                        "position": {"x": prop["x"], "y": prop["y"]},
+                        "otherReference": other_ref,
+                    }
+                )
+        # Field vs. other fields
+        for other in visible_props[idx + 1:]:
+            o_bb = _estimate_text_bbox(other["x"], other["y"], other["value"], other["angle"])
+            if _aabb_overlap(p_bb, o_bb):
+                overlapping_fields.append(
+                    {
+                        "type": "field_on_field",
+                        "reference": ref,
+                        "property": prop["name"],
+                        "value": prop["value"],
+                        "position": {"x": prop["x"], "y": prop["y"]},
+                        "otherReference": other["reference"],
+                        "otherProperty": other["name"],
+                    }
+                )
+
+    total = (
+        len(overlapping_symbols)
+        + len(overlapping_labels)
+        + len(overlapping_wires)
+        + len(overlapping_fields)
+    )
 
     return {
         "overlappingSymbols": overlapping_symbols,
         "overlappingLabels": overlapping_labels,
         "overlappingWires": overlapping_wires,
+        "overlappingFields": overlapping_fields,
         "totalOverlaps": total,
     }
 

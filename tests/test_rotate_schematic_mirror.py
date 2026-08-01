@@ -36,14 +36,21 @@ sys.modules.setdefault("commands.pin_locator", _pin_locator_mock)
 _wd_spec.loader.exec_module(_wd_mod)
 WireDragger = _wd_mod.WireDragger
 
+# Immediately remove the throwaway pin_locator mock. wire_dragger imports
+# pin_locator lazily (inside get_pin_defs), so the mock is no longer needed
+# once wire_dragger is loaded. Leaving it in sys.modules would leak into
+# later-collected modules (e.g. test_schematic_analysis) which import the
+# real commands.pin_locator and would silently get this mock instead (#287).
+if not _had_real_pin_locator and sys.modules.get("commands.pin_locator") is _pin_locator_mock:
+    del sys.modules["commands.pin_locator"]
+
 
 def teardown_module(module: object) -> None:
     """Undo the module-level ``commands.pin_locator`` stub above.
 
-    Without this, ``setdefault`` leaves the throwaway mock installed for the
-    rest of the pytest process: every later-collected file that imports the
-    real ``commands.pin_locator`` (e.g. via ``WireDragger.get_pin_defs``) gets
-    this mock instead, silently returning empty pin data (#287).
+    The mock is already removed right after wire_dragger was loaded above; this
+    teardown is kept as a defensive no-op in case a future change re-introduces
+    a leak.
     """
     if not _had_real_pin_locator and sys.modules.get("commands.pin_locator") is _pin_locator_mock:
         del sys.modules["commands.pin_locator"]
@@ -302,3 +309,123 @@ def test_rotate_handler_no_crash(tmp_path):
     with open(sch_path) as f:
         updated = f.read()
     assert "90" in updated
+
+
+# ---------------------------------------------------------------------------
+# P0-a: rotation/mirror recomputes field positions from lib defaults
+# ---------------------------------------------------------------------------
+
+import textwrap as _textwrap  # noqa: E402
+
+from sexpdata import Symbol as _Symbol  # noqa: E402
+
+_PROP_K = _Symbol("property")
+_AT_K = _Symbol("at")
+_DNA_K = _Symbol("do_not_autoplace")
+
+
+def _field_at(sch, ref, prop_name):
+    """Return (x, y, angle) of a placed property, or None."""
+    found = WireDragger.find_symbol(sch, ref)
+    if not found:
+        return None
+    item = found[0]
+    for sub in item[1:]:
+        if isinstance(sub, list) and len(sub) >= 3 and sub[0] == _PROP_K:
+            if str(sub[1]).strip('"') == prop_name:
+                for p in sub[1:]:
+                    if isinstance(p, list) and len(p) >= 3 and p[0] == _AT_K:
+                        ang = float(p[3]) if len(p) >= 4 else 0.0
+                        return (float(p[1]), float(p[2]), ang)
+    return None
+
+
+_FIELD_SCH = _textwrap.dedent("""\
+    (kicad_sch (version 20250114) (generator "test")
+      (lib_symbols
+        (symbol "Test:R" (pin_numbers hide) (pin_names (offset 0))
+          (property "Reference" "R" (at 2.032 0 90)
+            (effects (font (size 1.27 1.27))))
+          (property "Value" "R" (at 0 0 90)
+            (effects (font (size 1.27 1.27))))
+          (symbol "R_1_1"
+            (pin passive line (at 0 3.81 270) (length 1.27)
+              (name "~" (effects (font (size 1.27 1.27))))
+              (number "1" (effects (font (size 1.27 1.27))))
+            )
+          )
+        )
+      )
+      (symbol (lib_id "Test:R") (at 100 100 0) (unit 1)
+        (property "Reference" "R1" (at 102.032 100 90)
+          (effects (font (size 1.27 1.27))))
+        (property "Value" "10k" (at 100 100 90)
+          (effects (font (size 1.27 1.27))))
+      )
+    )
+""")
+
+
+def test_rotation_recomputes_reference_field():
+    """Rotating 90° must move Reference from (102.032,100,90) to (100,97.968,0)."""
+    sch = _parse(_FIELD_SCH)
+    assert _field_at(sch, "R1", "Reference") == (102.032, 100.0, 90.0)
+    ok = WireDragger.update_symbol_rotation_mirror(sch, "R1", 90.0, None)
+    assert ok is True
+    ref_at = _field_at(sch, "R1", "Reference")
+    assert ref_at == (100.0, 97.968, 0)
+
+
+def test_rotation_recomputes_value_field():
+    """Value at lib (0,0,90) stays at origin (100,100) but text angle normalises 90->90... 90+90=180->0."""
+    sch = _parse(_FIELD_SCH)
+    ok = WireDragger.update_symbol_rotation_mirror(sch, "R1", 90.0, None)
+    assert ok is True
+    assert _field_at(sch, "R1", "Value") == (100.0, 100.0, 0)
+
+
+def test_field_text_angle_keepupright_270():
+    """Rotating 180°: Reference lib text_ang=90 → 90+180=270 → keep-upright 90."""
+    sch = _parse(_FIELD_SCH)
+    WireDragger.update_symbol_rotation_mirror(sch, "R1", 180.0, None)
+    # Reference lib (2.032,0,90): pin_world_xy(2.032,0,100,100,180,F,F)
+    # lx,ly=2.032,0; _rotate(2.032,0,-180)=(-2.032,0); -> (97.968,100); ang=270->90
+    assert _field_at(sch, "R1", "Reference") == (97.968, 100.0, 90)
+
+
+def test_do_not_autoplace_field_is_skipped():
+    """A property marked (do_not_autoplace yes) must not be repositioned."""
+    sch = _parse(_FIELD_SCH)
+    # Inject (do_not_autoplace yes) into the placed Reference property.
+    found = WireDragger.find_symbol(sch, "R1")
+    item = found[0]
+    for sub in item[1:]:
+        if (
+            isinstance(sub, list)
+            and len(sub) >= 3
+            and sub[0] == _PROP_K
+            and str(sub[1]).strip('"') == "Reference"
+        ):
+            sub.append([_DNA_K, _Symbol("yes")])
+            break
+    WireDragger.update_symbol_rotation_mirror(sch, "R1", 90.0, None)
+    # Reference stays at its original position; Value still moves.
+    assert _field_at(sch, "R1", "Reference") == (102.032, 100.0, 90.0)
+    assert _field_at(sch, "R1", "Value") == (100.0, 100.0, 0)
+
+
+def test_mirror_y_flips_reference_field_offset():
+    """mirror_y (negates screen-X) moves Reference from (102.032,100) to (97.968,100)."""
+    sch = _parse(_FIELD_SCH)
+    WireDragger.update_symbol_rotation_mirror(sch, "R1", 0.0, "y")
+    # lib (2.032,0,90): pin_world_xy(2.032,0,100,100,0,F,T)
+    # lx,ly=2.032,0; _rotate(2.032,0,0)=(2.032,0); mirror_y rx=-2.032 -> (97.968,100); ang=90
+    assert _field_at(sch, "R1", "Reference") == (97.968, 100.0, 90)
+
+
+def test_get_lib_property_positions_reads_top_level():
+    """get_lib_property_positions returns top-level lib property offsets."""
+    sch = _parse(_FIELD_SCH)
+    props = WireDragger.get_lib_property_positions(sch, "Test:R")
+    assert props["Reference"] == (2.032, 0.0, 90.0)
+    assert props["Value"] == (0.0, 0.0, 90.0)

@@ -267,7 +267,12 @@ class TestFindOverlappingElements:
         extra = _make_resistor_sexp("R1", 100, 100) + _make_resistor_sexp("R2", 200, 200)
         tmp = _make_temp_schematic(extra)
         result = find_overlapping_elements(tmp, tolerance=0.5)
-        assert result["totalOverlaps"] == 0
+        # No symbol-symbol, wire, or label overlaps. (Field-on-body overlaps are
+        # reported separately in overlappingFields and are a placement-quality
+        # concern, not an inter-symbol collision.)
+        assert result["overlappingSymbols"] == []
+        assert result["overlappingWires"] == []
+        assert result["overlappingLabels"] == []
 
     def test_collinear_wire_overlap(self) -> None:
         extra = """
@@ -308,7 +313,9 @@ class TestFindOverlappingElements:
         extra = _make_resistor_sexp("R1", 100, 100) + _make_resistor_sexp("R2", 110, 100)
         tmp = _make_temp_schematic(extra)
         result = find_overlapping_elements(tmp, tolerance=0.5)
-        assert result["totalOverlaps"] == 0
+        assert result["overlappingSymbols"] == []
+        assert result["overlappingWires"] == []
+        assert result["overlappingLabels"] == []
 
     def test_resistor_and_led_overlapping_bodies(self) -> None:
         """A resistor and an LED placed close enough that bodies overlap.
@@ -320,6 +327,34 @@ class TestFindOverlappingElements:
         tmp = _make_temp_schematic(extra)
         result = find_overlapping_elements(tmp, tolerance=0.5)
         assert result["totalOverlaps"] >= 1
+
+    def test_overlapping_fields_detects_value_on_body(self) -> None:
+        """Value placed at the symbol origin overlaps the body — must be flagged.
+
+        _make_resistor_sexp puts Value at (x, y, 90) which is inside the R body
+        envelope (pins at y ±3.81 → body spans the origin). Reference sits at
+        x+2.032, outside the body. Hidden Footprint/Datasheet must be ignored.
+        """
+        extra = _make_resistor_sexp("R1", 100, 100)
+        tmp = _make_temp_schematic(extra)
+        result = find_overlapping_elements(tmp, tolerance=0.5)
+        fields = result["overlappingFields"]
+        assert any(
+            f["type"] == "field_on_own_body" and f["property"] == "Value" for f in fields
+        ), "Value on body should be flagged"
+        # Reference is outside the body → not flagged as field_on_own_body
+        assert not any(
+            f["property"] == "Reference" and f["type"] == "field_on_own_body" for f in fields
+        )
+        # Hidden fields (Footprint/Datasheet) are never flagged
+        assert not any(f["property"] in ("Footprint", "Datasheet") for f in fields)
+
+    def test_overlapping_fields_key_present(self) -> None:
+        """The result always carries an overlappingFields list (possibly empty)."""
+        tmp = _make_temp_schematic("")
+        result = find_overlapping_elements(tmp, tolerance=0.5)
+        assert "overlappingFields" in result
+        assert isinstance(result["overlappingFields"], list)
 
 
 class TestGetElementsInRegion:

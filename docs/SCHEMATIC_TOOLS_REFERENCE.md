@@ -21,8 +21,9 @@ Add a component to the schematic. Symbol format is 'Library:SymbolName' (e.g., '
 | value         | string | No       | Component value                                                  |
 | footprint     | string | No       | KiCAD footprint (e.g. Resistor_SMD:R_0603_1608Metric)            |
 | position      | object | No       | Position on schematic with x and y coordinates                   |
+| autoPositionFields | enum | No  | Post-place field cleanup: `auto` (default) / `true` / `false`. `auto` and `true` reposition Reference/Value outside the body via `autoplace_schematic_fields`; `false` leaves fields at library offsets (legacy behaviour). |
 
-**Usage Notes:** The dynamic symbol loader provides access to ~10,000 KiCad standard symbols. If a symbol is not in the static template map, it will be loaded dynamically from the specified library.
+**Usage Notes:** The dynamic symbol loader provides access to ~10,000 KiCad standard symbols. If a symbol is not in the static template map, it will be loaded dynamically from the specified library. With `autoPositionFields` at its default (`auto`), Reference/Value are moved outside the symbol body right after placement, so text does not overlap the graphics — this is the recommended setting for headless authoring.
 
 ### delete_schematic_component
 
@@ -169,6 +170,7 @@ Rotate a placed symbol in the schematic.
 | reference     | string | Yes      | Reference designator (e.g., R1, U1)         |
 | angle         | number | Yes      | Rotation angle in degrees (0, 90, 180, 270) |
 | mirror        | enum   | No       | Optional mirror axis ("x" or "y")           |
+| autoPositionFields | enum | No  | Post-rotate field cleanup: `auto` (default) / `true` / `false`. On rotate/mirror, field positions are first recomputed from library defaults so they follow the rotated body (keep-upright text angle: 180→0, 270→90), then `auto`/`true` run `autoplace_schematic_fields` to push Reference/Value fully outside the body. `do_not_autoplace yes` fields are preserved. |
 
 ### annotate_schematic
 

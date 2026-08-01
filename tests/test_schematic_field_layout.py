@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "python"))
 from commands.schematic_field_layout import (  # noqa: E402
     SchematicFieldLayoutCommands,
     _bbox_overlaps,
+    _gather_components,
     _gather_labels,
 )
 from commands.schematic_text_utils import (  # noqa: E402
@@ -210,3 +211,205 @@ class TestBatchSetPropertyPositions:
 class TestAutoplaceValidation:
     def test_autoplace_requires_path(self):
         assert SchematicFieldLayoutCommands().autoplace_schematic_fields({})["success"] is False
+
+
+# ---------------------------------------------------------------------------
+# P0-b: graphics-aware body bbox (union of body graphics + pin envelope)
+# ---------------------------------------------------------------------------
+
+import sexpdata as _sexpdata
+import uuid as _uuid
+
+from commands.pin_locator import PinLocator  # noqa: E402
+from commands.schematic import SchematicManager  # noqa: E402
+
+# A wide-body IC whose rectangle body (±5 X, ±3 Y) is larger than its pin
+# envelope (pins at ±2.54 X, ±1.27 Y → envelope ±3.81 X, ±2.54 Y). Under the
+# legacy pin-only bbox the body rectangle would be missed and autoplace could
+# drop Ref/Value onto the body; with graphics-aware bbox the rectangle extent
+# must dominate.
+_WIDE_IC_LIB_SYMBOL = """
+    (symbol "Test:WideIC" (pin_numbers hide) (pin_names (offset 0)) (in_bom yes) (on_board yes)
+      (property "Reference" "U" (at 0 5.08 0)
+        (effects (font (size 1.27 1.27)))
+      )
+      (property "Value" "WideIC" (at 0 -5.08 0)
+        (effects (font (size 1.27 1.27)))
+      )
+      (property "Footprint" "" (at 0 0 0)
+        (effects (font (size 1.27 1.27)) hide)
+      )
+      (property "Datasheet" "~" (at 0 0 0)
+        (effects (font (size 1.27 1.27)) hide)
+      )
+      (symbol "WideIC_0_1"
+        (rectangle (start -5 -3) (end 5 3)
+          (stroke (width 0.254) (type default))
+          (fill (type none))
+        )
+      )
+      (symbol "WideIC_1_1"
+        (pin passive line (at -2.54 -1.27 0) (length 1.27)
+          (name "~" (effects (font (size 1.27 1.27))))
+          (number "1" (effects (font (size 1.27 1.27))))
+        )
+        (pin passive line (at -2.54 1.27 0) (length 1.27)
+          (name "~" (effects (font (size 1.27 1.27))))
+          (number "2" (effects (font (size 1.27 1.27))))
+        )
+        (pin passive line (at 2.54 -1.27 180) (length 1.27)
+          (name "~" (effects (font (size 1.27 1.27))))
+          (number "3" (effects (font (size 1.27 1.27))))
+        )
+        (pin passive line (at 2.54 1.27 180) (length 1.27)
+          (name "~" (effects (font (size 1.27 1.27))))
+          (number "4" (effects (font (size 1.27 1.27))))
+        )
+      )
+    )
+"""
+
+
+def _make_wide_ic_sch(
+    tmp_path, x=100.0, y=100.0, rotation=0.0, mirror=None,
+    ref_y_offset=5.08, ref_do_not_autoplace=False,
+):
+    """Build a .kicad_sch with one placed Test:WideIC instance."""
+    mirror_tok = f"(mirror {mirror})" if mirror else ""
+    dna_tok = "      (do_not_autoplace yes)\n" if ref_do_not_autoplace else ""
+    content = f'''(kicad_sch (version 20260306) (generator "test") (generator_version "10.0")
+  (uuid "{_uuid.uuid4()}")
+  (paper "A4")
+  (lib_symbols
+{_WIDE_IC_LIB_SYMBOL}
+  )
+  (symbol (lib_id "Test:WideIC") (at {x} {y} {rotation}){mirror_tok} (unit 1)
+    (in_bom yes) (on_board yes) (dnp no)
+    (uuid "{_uuid.uuid4()}")
+    (property "Reference" "U1" (at {x} {y + ref_y_offset} 0)
+      (effects (font (size 1.27 1.27)))
+{dna_tok}    )
+    (property "Value" "WideIC" (at {x} {y - 5.08} 0)
+      (effects (font (size 1.27 1.27)))
+    )
+    (property "Footprint" "" (at {x} {y} 0)
+      (effects (font (size 1.27 1.27)) hide)
+    )
+    (property "Datasheet" "~" (at {x} {y} 0)
+      (effects (font (size 1.27 1.27)) hide)
+    )
+    (pin "1" (uuid "{_uuid.uuid4()}"))
+    (pin "2" (uuid "{_uuid.uuid4()}"))
+    (pin "3" (uuid "{_uuid.uuid4()}"))
+    (pin "4" (uuid "{_uuid.uuid4()}"))
+    (instances
+      (project "test"
+        (path "/" (reference "U1") (unit 1))
+      )
+    )
+  )
+  (sheet_instances
+    (path "/" (page "1"))
+  )
+)
+'''
+    f = tmp_path / "wide_ic.kicad_sch"
+    f.write_text(content, encoding="utf-8")
+    return f
+
+
+class TestGatherComponentsGraphicsBbox:
+    """P0-b: _gather_components must use body graphics bbox unioned with pin envelope."""
+
+    def test_wide_ic_bbox_uses_graphics(self, tmp_path):
+        f = _make_wide_ic_sch(tmp_path)
+        schematic = SchematicManager.load_schematic(str(f))
+        raw = f.read_text(encoding="utf-8")
+        sexp_data = _sexpdata.loads(raw)
+        comps = _gather_components(schematic, f, raw, PinLocator(), sexp_data=sexp_data)
+        u1 = [c for c in comps if c["reference"] == "U1"][0]
+        assert "body_bbox" in u1
+        bb = u1["body_bbox"]
+        # Rectangle ±5 X, ±3 Y dominates over pin envelope (±3.81 X, ±2.54 Y)
+        assert bb["x_min"] == pytest.approx(100 - 5, abs=0.05)
+        assert bb["x_max"] == pytest.approx(100 + 5, abs=0.05)
+        assert bb["y_min"] == pytest.approx(100 - 3, abs=0.05)
+        assert bb["y_max"] == pytest.approx(100 + 3, abs=0.05)
+
+    def test_wide_ic_bbox_legacy_without_sexp(self, tmp_path):
+        """Without sexp_data, falls back to the legacy pin-only envelope."""
+        f = _make_wide_ic_sch(tmp_path)
+        schematic = SchematicManager.load_schematic(str(f))
+        raw = f.read_text(encoding="utf-8")
+        comps = _gather_components(schematic, f, raw, PinLocator())
+        u1 = [c for c in comps if c["reference"] == "U1"][0]
+        bb = u1["body_bbox"]
+        # Pin envelope: X ±(2.54+1.27)=3.81, Y ±(1.27+1.27)=2.54
+        assert bb["x_min"] == pytest.approx(100 - 3.81, abs=0.05)
+        assert bb["x_max"] == pytest.approx(100 + 3.81, abs=0.05)
+        assert bb["y_min"] == pytest.approx(100 - 2.54, abs=0.05)
+        assert bb["y_max"] == pytest.approx(100 + 2.54, abs=0.05)
+
+    def test_wide_ic_mirror_y_recorded(self, tmp_path):
+        """P0-b配套: mirror state is captured from sexp_data."""
+        f = _make_wide_ic_sch(tmp_path, mirror="y")
+        schematic = SchematicManager.load_schematic(str(f))
+        raw = f.read_text(encoding="utf-8")
+        sexp_data = _sexpdata.loads(raw)
+        comps = _gather_components(schematic, f, raw, PinLocator(), sexp_data=sexp_data)
+        u1 = [c for c in comps if c["reference"] == "U1"][0]
+        assert u1.get("mirror_y") is True
+        assert u1.get("mirror_x") is False
+
+
+# ---------------------------------------------------------------------------
+# P1-c: autoplace respects (do_not_autoplace yes)
+# ---------------------------------------------------------------------------
+
+
+class TestAutoplaceDoNotAutoplace:
+    """A field locked with (do_not_autoplace yes) must not be moved by autoplace."""
+
+    def _prop_at(self, f, ref, prop):
+        from commands.schematic_text_utils import _extract_property_position
+        raw = f.read_text(encoding="utf-8")
+        from commands.schematic_text_utils import _find_placed_symbol_block
+        block, _, _ = _find_placed_symbol_block(raw, ref)
+        return _extract_property_position(block, prop)
+
+    def test_locked_reference_is_not_moved(self, tmp_path):
+        # Reference placed inside the body (y_offset 0 → at (100,100), body spans
+        # y 97..103), so autoplace would normally move it. Lock it and verify it
+        # stays put while Value still gets repositioned.
+        f = _make_wide_ic_sch(tmp_path, ref_y_offset=0.0, ref_do_not_autoplace=True)
+        ref_before = self._prop_at(f, "U1", "Reference")
+        val_before = self._prop_at(f, "U1", "Value")
+        SchematicFieldLayoutCommands().autoplace_schematic_fields(
+            {"schematicPath": str(f), "references": ["U1"]}
+        )
+        ref_after = self._prop_at(f, "U1", "Reference")
+        val_after = self._prop_at(f, "U1", "Value")
+        assert ref_after == ref_before, "locked Reference must not move"
+        assert val_after != val_before, "Value should still be repositioned"
+
+    def test_unlocked_reference_is_moved(self, tmp_path):
+        # Same setup but without the lock: Reference inside the body must move.
+        f = _make_wide_ic_sch(tmp_path, ref_y_offset=0.0, ref_do_not_autoplace=False)
+        ref_before = self._prop_at(f, "U1", "Reference")
+        SchematicFieldLayoutCommands().autoplace_schematic_fields(
+            {"schematicPath": str(f), "references": ["U1"]}
+        )
+        ref_after = self._prop_at(f, "U1", "Reference")
+        assert ref_after != ref_before, "unlocked Reference inside body should move"
+
+    def test_result_includes_unresolved_key(self, tmp_path):
+        # The autoplace result must always carry an "unresolved" list (possibly
+        # empty) so callers can detect components that could not be placed
+        # without collision even after growing the clearance.
+        f = _make_wide_ic_sch(tmp_path)
+        res = SchematicFieldLayoutCommands().autoplace_schematic_fields(
+            {"schematicPath": str(f), "references": ["U1"]}
+        )
+        assert res["success"] is True
+        assert "unresolved" in res
+        assert isinstance(res["unresolved"], list)

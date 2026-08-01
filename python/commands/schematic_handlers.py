@@ -293,6 +293,27 @@ class SchematicHandlersMixin:
                         response["requested_at"] = {"x": x, "y": y}
             except Exception:
                 pass  # Best-effort read; the component was placed successfully.
+
+            # autoPositionFields: {false, true, auto} (default "auto").
+            # After placing, reposition Reference/Value outside the body so they
+            # don't overlap the symbol graphics (the main user-visible problem).
+            # "auto" and "true" both trigger it for a freshly placed component
+            # (its fields are still at library defaults); "false" preserves the
+            # legacy behaviour of leaving fields at library offsets.
+            auto_position = str(params.get("autoPositionFields", "auto")).lower()
+            if auto_position in ("true", "auto"):
+                try:
+                    from commands.schematic_field_layout import (
+                        SchematicFieldLayoutCommands,
+                    )
+
+                    SchematicFieldLayoutCommands().autoplace_schematic_fields(
+                        {"schematicPath": schematic_path, "references": [reference]}
+                    )
+                except Exception as ap_err:
+                    logger.warning(
+                        f"autoplace after add failed for {reference}: {ap_err}"
+                    )
             return response
         except Exception as e:
             logger.error(f"Error adding component to schematic: {str(e)}")
@@ -2019,6 +2040,25 @@ class SchematicHandlersMixin:
 
             with open(schematic_path, "w", encoding="utf-8") as f:
                 f.write(kicad_dumps(sch_data))
+
+            # autoPositionFields: {false, true, auto} (default "auto").
+            # P0-a already recomputed field positions to follow the rotated body;
+            # this second pass moves Reference/Value fully outside the body to
+            # avoid overlap with the symbol graphics.
+            auto_position = str(params.get("autoPositionFields", "auto")).lower()
+            if auto_position in ("true", "auto"):
+                try:
+                    from commands.schematic_field_layout import (
+                        SchematicFieldLayoutCommands,
+                    )
+
+                    SchematicFieldLayoutCommands().autoplace_schematic_fields(
+                        {"schematicPath": schematic_path, "references": [reference]}
+                    )
+                except Exception as ap_err:
+                    logger.warning(
+                        f"autoplace after rotate failed for {reference}: {ap_err}"
+                    )
 
             return {
                 "success": True,

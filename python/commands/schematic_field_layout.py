@@ -18,9 +18,15 @@ from typing import Any, Dict, List
 
 from commands.pin_locator import PinLocator
 from commands.schematic import SchematicLoadError, SchematicManager
+from commands.schematic_analysis import (
+    _compute_symbol_bbox_direct,
+    _extract_lib_symbols,
+    _parse_symbols,
+)
 from commands.schematic_text_utils import (
     _extract_property_position,
     _extract_property_visible,
+    _extract_property_do_not_autoplace,
     _find_placed_symbol_block,
     _move_property_in_block,
 )
@@ -34,9 +40,29 @@ _BODY_PAD_MM = 1.27
 
 
 def _gather_components(
-    schematic, sch_path: Path, raw_content: str, locator: PinLocator
+    schematic, sch_path: Path, raw_content: str, locator: PinLocator, sexp_data=None
 ) -> List[Dict[str, Any]]:
-    """Build enriched component dicts: position, value, libId, pins, body_bbox, ref/value_field."""
+    """Build enriched component dicts: position, value, libId, pins, body_bbox, ref/value_field.
+
+    When ``sexp_data`` is supplied, the body bounding box is computed from the
+    symbol's graphical body elements (rectangle/polyline/circle/arc, via
+    ``schematic_analysis._compute_symbol_bbox_direct``) unioned with the pin
+    envelope, instead of the legacy pin-only envelope. This fixes the case
+    where a wide-body IC's pin envelope is smaller than its actual graphics,
+    causing autoplace to put Ref/Value fields on top of the body rectangle.
+    """
+    # Optional: richer bbox data from parsed sexp (graphics + mirror info).
+    lib_defs: Dict[str, Dict] = {}
+    sym_meta_by_ref: Dict[str, Dict[str, Any]] = {}
+    if sexp_data is not None:
+        try:
+            lib_defs = _extract_lib_symbols(sexp_data)
+            for sym in _parse_symbols(sexp_data):
+                if sym.get("reference"):
+                    sym_meta_by_ref[sym["reference"]] = sym
+        except Exception:
+            lib_defs = {}
+
     components: List[Dict[str, Any]] = []
     for symbol in schematic.symbol:
         if not hasattr(symbol.property, "Reference"):
@@ -56,15 +82,28 @@ def _gather_components(
             "rotation": float(position[2]) if len(position) > 2 else 0,
         }
 
+        # Mirror state is only available from the parsed sexp; fall back to no
+        # mirror when sexp_data was not provided (legacy behaviour).
+        sym_meta = sym_meta_by_ref.get(ref)
+        if sym_meta is not None:
+            comp["mirror_x"] = bool(sym_meta.get("mirror_x", False))
+            comp["mirror_y"] = bool(sym_meta.get("mirror_y", False))
+
         block_text, _, _ = _find_placed_symbol_block(raw_content, ref)
         if block_text:
             ref_pos = _extract_property_position(block_text, "Reference")
             if ref_pos:
                 ref_pos["visible"] = _extract_property_visible(block_text, "Reference")
+                ref_pos["do_not_autoplace"] = _extract_property_do_not_autoplace(
+                    block_text, "Reference"
+                )
                 comp["ref_field"] = ref_pos
             val_pos = _extract_property_position(block_text, "Value")
             if val_pos:
                 val_pos["visible"] = _extract_property_visible(block_text, "Value")
+                val_pos["do_not_autoplace"] = _extract_property_do_not_autoplace(
+                    block_text, "Value"
+                )
                 comp["value_field"] = val_pos
 
         try:
@@ -80,12 +119,43 @@ def _gather_components(
                 comp["pins"] = pin_list
                 xs = [p["position"]["x"] for p in pin_list]
                 ys = [p["position"]["y"] for p in pin_list]
-                comp["body_bbox"] = {
+                pin_envelope = {
                     "x_min": min(xs) - _BODY_PAD_MM,
                     "y_min": min(ys) - _BODY_PAD_MM,
                     "x_max": max(xs) + _BODY_PAD_MM,
                     "y_max": max(ys) + _BODY_PAD_MM,
                 }
+
+                # Prefer a graphics-aware bbox (union of body graphics + pins)
+                # when lib definition data is available; this prevents fields
+                # being placed on top of wide-body IC rectangles whose pin
+                # envelope is smaller than the actual body.
+                graphics_bbox = None
+                if sym_meta is not None and lib_id in lib_defs:
+                    ld = lib_defs[lib_id]
+                    gp = ld.get("graphics_points") or None
+                    pd = ld.get("pins") or {}
+                    if pd or gp:
+                        bb = _compute_symbol_bbox_direct(
+                            sym_meta, pd, margin=0.0, graphics_points=gp
+                        )
+                        if bb is not None:
+                            graphics_bbox = {
+                                "x_min": bb[0],
+                                "y_min": bb[1],
+                                "x_max": bb[2],
+                                "y_max": bb[3],
+                            }
+
+                if graphics_bbox is not None:
+                    comp["body_bbox"] = {
+                        "x_min": min(graphics_bbox["x_min"], pin_envelope["x_min"]),
+                        "y_min": min(graphics_bbox["y_min"], pin_envelope["y_min"]),
+                        "x_max": max(graphics_bbox["x_max"], pin_envelope["x_max"]),
+                        "y_max": max(graphics_bbox["y_max"], pin_envelope["y_max"]),
+                    }
+                else:
+                    comp["body_bbox"] = pin_envelope
         except Exception:
             pass  # pin lookup is best-effort
 
@@ -359,7 +429,19 @@ class SchematicFieldLayoutCommands:
             raw_content = sch_path.read_text(encoding="utf-8")
             locator = PinLocator()
 
-            components = _gather_components(schematic, sch_path, raw_content, locator)
+            # Parse the sexp once so _gather_components can compute a
+            # graphics-aware body bbox (union of body graphics + pin envelope)
+            # instead of the legacy pin-only envelope.
+            try:
+                import sexpdata
+
+                sexp_data = sexpdata.loads(raw_content)
+            except Exception:
+                sexp_data = None
+
+            components = _gather_components(
+                schematic, sch_path, raw_content, locator, sexp_data=sexp_data
+            )
             if references_filter:
                 components = [c for c in components if c["reference"] in references_filter]
             net_labels = [
@@ -412,6 +494,7 @@ class SchematicFieldLayoutCommands:
 
             updates: List[Dict[str, Any]] = []
             placed_field_bboxes: List[Dict[str, float]] = []
+            unresolved_refs: List[str] = []
 
             def has_collision(ref_bb, val_bb, exclude_ref):
                 for other_ref, other_ext in comp_ext_bboxes.items():
@@ -433,6 +516,18 @@ class SchematicFieldLayoutCommands:
                     continue
                 cx, cy = comp["position"]["x"], comp["position"]["y"]
                 val_text = comp.get("value", ref)
+
+                # Fields the user locked with (do_not_autoplace yes) are not moved.
+                # Their current bbox is still added as an obstacle so the fields we
+                # do reposition avoid overlapping the locked ones.
+                ref_locked = bool(comp.get("ref_field", {}).get("do_not_autoplace", False))
+                val_locked = bool(comp.get("value_field", {}).get("do_not_autoplace", False))
+                if ref_locked and comp.get("ref_field"):
+                    rf = comp["ref_field"]
+                    placed_field_bboxes.append(field_bbox(rf["x"], rf["y"], ref))
+                if val_locked and comp.get("value_field"):
+                    vf = comp["value_field"]
+                    placed_field_bboxes.append(field_bbox(vf["x"], vf["y"], val_text))
 
                 is_power = lib_id.startswith("kicad_power:") or lib_id.startswith("power:")
                 if is_power:
@@ -500,26 +595,41 @@ class SchematicFieldLayoutCommands:
                     return snap(x0 - half_ref_w), ref_y, snap(x0 - half_val_w), ref_y + stack
 
                 ref_x = ref_y = val_x = val_y = ref_bb = val_bb = None
-                for side in sides:
-                    rx, ry, vx, vy = try_side(side)
-                    rb, vb = field_bbox(rx, ry, ref), field_bbox(vx, vy, val_text)
-                    if not has_collision(rb, vb, ref):
-                        ref_x, ref_y, val_x, val_y, ref_bb, val_bb = rx, ry, vx, vy, rb, vb
+                # Try every side at the requested clearance; if all collide, grow
+                # the spacing (by one grid each pass) and retry, up to 4 passes.
+                # This avoids dropping Ref/Value back onto the body when the
+                # schematic is dense — instead the fields are pushed further out.
+                for _attempt in range(4):
+                    for side in sides:
+                        rx, ry, vx, vy = try_side(side)
+                        rb, vb = field_bbox(rx, ry, ref), field_bbox(vx, vy, val_text)
+                        if not has_collision(rb, vb, ref):
+                            ref_x, ref_y, val_x, val_y, ref_bb, val_bb = (
+                                rx, ry, vx, vy, rb, vb
+                            )
+                            break
+                    if ref_x is not None:
                         break
+                    clearance += _GRID  # grow spacing; try_side reads this closure var
                 if ref_x is None:
+                    # Still colliding after max spacing — place at the preferred
+                    # side anyway and flag it so the caller knows to review.
+                    unresolved_refs.append(ref)
                     ref_x, ref_y, val_x, val_y = try_side(sides[0])
                     ref_bb, val_bb = field_bbox(ref_x, ref_y, ref), field_bbox(
                         val_x, val_y, val_text
                     )
 
-                placed_field_bboxes.append(ref_bb)
-                placed_field_bboxes.append(val_bb)
-                updates.append(
-                    {"reference": ref, "property": "Reference", "x": ref_x, "y": ref_y, "angle": 0}
-                )
-                updates.append(
-                    {"reference": ref, "property": "Value", "x": val_x, "y": val_y, "angle": 0}
-                )
+                if not ref_locked:
+                    placed_field_bboxes.append(ref_bb)
+                    updates.append(
+                        {"reference": ref, "property": "Reference", "x": ref_x, "y": ref_y, "angle": 0}
+                    )
+                if not val_locked:
+                    placed_field_bboxes.append(val_bb)
+                    updates.append(
+                        {"reference": ref, "property": "Value", "x": val_x, "y": val_y, "angle": 0}
+                    )
 
             if not updates:
                 return {"success": True, "message": "No components to update.", "updated_count": 0}
@@ -536,6 +646,7 @@ class SchematicFieldLayoutCommands:
                 "updated_count": applied,
                 "failed_count": failed,
                 "failed": batch_result.get("failed", []),
+                "unresolved": unresolved_refs,
             }
 
         except Exception as e:

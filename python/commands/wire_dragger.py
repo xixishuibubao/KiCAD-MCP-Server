@@ -251,6 +251,117 @@ class WireDragger:
         return result
 
     @staticmethod
+    def get_lib_property_positions(
+        sch_data: list, lib_id: str
+    ) -> Dict[str, Tuple[float, float, float]]:
+        """Return top-level lib property default positions for a lib_id.
+
+        Returns {prop_name: (lib_dx, lib_dy, lib_text_angle)} in local symbol
+        coordinates, read from the lib_symbols section of sch_data. Only top-level
+        (unit-0 / shared) properties are returned; unit-specific properties live
+        in sub-symbols (e.g. "R_1_1") and are not handled here. Returns {} if
+        the lib_id is not found.
+        """
+        lib_sym_k = _K["lib_symbols"]
+        symbol_k = _K["symbol"]
+        prop_k = _K["property"]
+        at_k = _K["at"]
+
+        for item in sch_data:
+            if not (isinstance(item, list) and item and item[0] == lib_sym_k):
+                continue
+            for sym_def in item[1:]:
+                if not (isinstance(sym_def, list) and sym_def and sym_def[0] == symbol_k):
+                    continue
+                if len(sym_def) < 2 or str(sym_def[1]).strip('"') != lib_id:
+                    continue
+                result: Dict[str, Tuple[float, float, float]] = {}
+                for sub in sym_def[1:]:
+                    # Stop at the first sub-symbol definition (unit graphics/pins).
+                    if isinstance(sub, list) and sub and sub[0] == symbol_k:
+                        break
+                    if not (isinstance(sub, list) and len(sub) >= 3 and sub[0] == prop_k):
+                        continue
+                    name = str(sub[1]).strip('"')
+                    if name in result:
+                        continue
+                    for psub in sub[1:]:
+                        if isinstance(psub, list) and len(psub) >= 4 and psub[0] == at_k:
+                            result[name] = (float(psub[1]), float(psub[2]), float(psub[3]))
+                            break
+                return result
+            break
+        return {}
+
+    @staticmethod
+    def _recompute_symbol_field_positions(
+        item: list,
+        sym_x: float,
+        sym_y: float,
+        new_rotation: float,
+        new_mirror_x: bool,
+        new_mirror_y: bool,
+        lib_props: Dict[str, Tuple[float, float, float]],
+    ) -> int:
+        """Recompute each placed property's (at) from its lib default offset.
+
+        Uses the same forward transform as pin_world_xy (Y-flip -> rotate ->
+        mirror -> translate) so fields follow the rotated/mirrored body instead
+        of staying at their pre-rotation absolute coordinates. Text angle is
+        normalised into {0, 90} (eeschema keep-upright: 180->0, 270->90).
+        Properties marked (do_not_autoplace yes) are skipped. Returns the count
+        of repositioned fields.
+        """
+        prop_k = _K["property"]
+        at_k = _K["at"]
+        dna_k = Symbol("do_not_autoplace")
+
+        moved = 0
+        for sub in item[1:]:
+            if not (isinstance(sub, list) and len(sub) >= 3 and sub[0] == prop_k):
+                continue
+            name = str(sub[1]).strip('"')
+            if name not in lib_props:
+                continue
+            locked = False
+            for p in sub[1:]:
+                if (
+                    isinstance(p, list)
+                    and p
+                    and p[0] == dna_k
+                    and len(p) >= 2
+                    and str(p[1]) == "yes"
+                ):
+                    locked = True
+                    break
+            if locked:
+                continue
+
+            lib_dx, lib_dy, lib_text_ang = lib_props[name]
+            new_px, new_py = WireDragger.pin_world_xy(
+                lib_dx, lib_dy, sym_x, sym_y, new_rotation, new_mirror_x, new_mirror_y
+            )
+            new_pa = (lib_text_ang + new_rotation) % 360
+            if new_pa == 180:
+                new_pa = 0
+            elif new_pa == 270:
+                new_pa = 90
+            if float(new_pa).is_integer():
+                new_pa = int(new_pa)
+
+            for psub in sub[1:]:
+                if isinstance(psub, list) and len(psub) >= 3 and psub[0] == at_k:
+                    psub[1] = round(new_px, 3)
+                    psub[2] = round(new_py, 3)
+                    if len(psub) >= 4:
+                        psub[3] = new_pa
+                    else:
+                        psub.append(new_pa)
+                    moved += 1
+                    break
+        return moved
+
+    @staticmethod
     def update_symbol_rotation_mirror(
         sch_data: list,
         reference: str,
@@ -267,6 +378,9 @@ class WireDragger:
         if found is None:
             return False
         item = found[0]
+        old_x = found[1]
+        old_y = found[2]
+        lib_id = found[4]
         at_k = _K["at"]
         mirror_k = _K["mirror"]
 
@@ -287,8 +401,21 @@ class WireDragger:
             del item[i]
 
         # Insert new mirror token if requested
+        new_mirror_x = new_mirror == "x"
+        new_mirror_y = new_mirror == "y"
         if new_mirror in ("x", "y"):
             item.append([mirror_k, Symbol(new_mirror)])
+
+        # Recompute field positions from lib defaults so Reference/Value/etc.
+        # follow the body instead of staying at their pre-rotation absolute
+        # position (the main cause of text/body overlap). The symbol origin
+        # (old_x, old_y) is unchanged by a pure rotation/mirror.
+        if lib_id:
+            lib_props = WireDragger.get_lib_property_positions(sch_data, lib_id)
+            if lib_props:
+                WireDragger._recompute_symbol_field_positions(
+                    item, old_x, old_y, rot_val, new_mirror_x, new_mirror_y, lib_props
+                )
 
         return True
 
