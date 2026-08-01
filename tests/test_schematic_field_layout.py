@@ -413,3 +413,40 @@ class TestAutoplaceDoNotAutoplace:
         assert res["success"] is True
         assert "unresolved" in res
         assert isinstance(res["unresolved"], list)
+
+
+# ---------------------------------------------------------------------------
+# P0-a + P0-b + P1-a integration: rotate a wide-body IC, then autoplace
+# ---------------------------------------------------------------------------
+
+class TestRotateThenAutoplaceWideIC:
+    """End-to-end: rotate a wide-body IC 90°, recompute fields (P0-a), then
+    autoplace (P1-a) using the graphics-aware body bbox (P0-b). The fields
+    must end up outside the rotated body (no field_on_own_body overlap)."""
+
+    def test_rotate_90_then_autoplace_no_field_on_body(self, tmp_path):
+        import sexpdata as _sex
+        from utils.sexpr_format import dumps as kicad_dumps
+        from commands.schematic_analysis import find_overlapping_elements
+        from commands.wire_dragger import WireDragger
+
+        # Place a wide-body IC at rotation=0, then rotate it 90° in-place.
+        f = _make_wide_ic_sch(tmp_path, x=100.0, y=100.0, rotation=0.0)
+        sch = _sex.loads(f.read_text(encoding="utf-8"))
+        ok = WireDragger.update_symbol_rotation_mirror(sch, "U1", 90.0, None)
+        assert ok is True
+        f.write_text(kicad_dumps(sch), encoding="utf-8")
+
+        # Now run the neighbourhood-aware autoplace.
+        ap = SchematicFieldLayoutCommands().autoplace_schematic_fields(
+            {"schematicPath": str(f), "references": ["U1"]}
+        )
+        assert ap["success"] is True
+
+        # After autoplace, no visible field should overlap its own body.
+        overlaps = find_overlapping_elements(f)
+        own = [
+            o for o in overlaps["overlappingFields"]
+            if o.get("type") == "field_on_own_body" and o.get("reference") == "U1"
+        ]
+        assert own == [], f"U1 field still on body after autoplace: {own}"

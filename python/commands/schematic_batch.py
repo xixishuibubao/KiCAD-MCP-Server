@@ -170,19 +170,13 @@ class SchematicBatchCommands:
                     block_text, block_start, block_end = _find_placed_symbol_block(
                         raw_content, reference
                     )
-                    if str(auto_position_fields).lower() in ("true", "auto") and block_text:
-                        cx, cy = _snap(x), _snap(y)
-                        new_block = block_text
-                        for prop, px, py, pa in _field_positions_for_pins(cx, cy, all_pins):
-                            new_block, _ = _move_property_in_block(
-                                new_block, prop, px, py, pa, True
-                            )
-                        if new_block != block_text:
-                            raw_content = (
-                                raw_content[:block_start] + new_block + raw_content[block_end + 1 :]
-                            )
-                            schematic_file.write_text(raw_content, encoding="utf-8")
-                            block_text = new_block
+                    # Per-component field positioning used to happen here via
+                    # _field_positions_for_pins, but it had no awareness of
+                    # neighbouring components and could drop fields onto an
+                    # adjacent body. Field layout is now done in one
+                    # neighbourhood-aware pass after every component is placed
+                    # (see the autoplace call below), so Ref/Value end up clear
+                    # of all bodies, not just this one.
 
                     if block_text:
                         ref_pos = _extract_property_position(block_text, "Reference")
@@ -230,6 +224,40 @@ class SchematicBatchCommands:
                             hier.fix_subsheet_instances(str(candidate), candidate_content)
                     except Exception:
                         pass
+
+            # One neighbourhood-aware field-layout pass for every component
+            # placed in this batch. autoplace already knows about all symbols
+            # on the sheet (including pre-existing ones), so Ref/Value land
+            # clear of every body, not just their own. This replaces the old
+            # per-component _field_positions_for_pins loop.
+            if str(auto_position_fields).lower() in ("true", "auto") and results:
+                try:
+                    from commands.schematic_field_layout import (
+                        SchematicFieldLayoutCommands,
+                    )
+
+                    refs = [r["reference"] for r in results if r.get("reference")]
+                    ap_res = SchematicFieldLayoutCommands().autoplace_schematic_fields(
+                        {"schematicPath": str(schematic_file), "references": refs}
+                    )
+                    # Re-read the placed field positions so the reported
+                    # ref_position/value_position reflect the final layout.
+                    raw_after = schematic_file.read_text(encoding="utf-8")
+                    for r in results:
+                        blk, _, _ = _find_placed_symbol_block(raw_after, r["reference"])
+                        if blk:
+                            rp = _extract_property_position(blk, "Reference")
+                            vp = _extract_property_position(blk, "Value")
+                            if rp:
+                                r["ref_position"] = rp
+                            if vp:
+                                r["value_position"] = vp
+                    if ap_res.get("unresolved"):
+                        logger.warning(
+                            f"batch autoplace unresolved: {ap_res['unresolved']}"
+                        )
+                except Exception as ap_err:
+                    logger.warning(f"batch autoplace failed: {ap_err}")
 
             placement_bbox = None
             bbs = [r["body_bbox"] for r in results if "body_bbox" in r]

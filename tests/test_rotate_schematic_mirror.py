@@ -429,3 +429,43 @@ def test_get_lib_property_positions_reads_top_level():
     props = WireDragger.get_lib_property_positions(sch, "Test:R")
     assert props["Reference"] == (2.032, 0.0, 90.0)
     assert props["Value"] == (0.0, 0.0, 90.0)
+
+
+# ---------------------------------------------------------------------------
+# P0-a golden: rotation × mirror full matrix for field recomputation
+# ---------------------------------------------------------------------------
+# lib Reference (2.032, 0, 90), Value (0, 0, 90); symbol at (100, 100).
+# Forward transform = Y-flip → rotate(-R) → mirror → translate; text angle
+# keep-upright (180→0, 270→90). Value sits at the origin so only its angle
+# changes; Reference moves around the body.
+import pytest  # noqa: E402
+
+# (rotation, mirror, expected_ref, expected_val_angle)
+_GOLDEN = [
+    (0, None, (102.032, 100.0, 90), 90),
+    (90, None, (100.0, 97.968, 0), 0),
+    (180, None, (97.968, 100.0, 90), 90),
+    (270, None, (100.0, 102.032, 0), 0),
+    (0, "x", (102.032, 100.0, 90), 90),
+    (0, "y", (97.968, 100.0, 90), 90),
+    (90, "x", (100.0, 102.032, 0), 0),
+    (90, "y", (100.0, 97.968, 0), 0),
+    (180, "x", (97.968, 100.0, 90), 90),
+    (180, "y", (102.032, 100.0, 90), 90),
+    (270, "x", (100.0, 97.968, 0), 0),
+    (270, "y", (100.0, 102.032, 0), 0),
+]
+
+
+@pytest.mark.parametrize("rot,mirror,exp_ref,exp_val_ang", _GOLDEN)
+def test_rotation_mirror_field_golden_matrix(rot, mirror, exp_ref, exp_val_ang):
+    """All 12 rotation×mirror combinations must recompute Reference to the
+    golden position/angle and Value to (100,100) with the keep-upright angle."""
+    sch = _parse(_FIELD_SCH)
+    ok = WireDragger.update_symbol_rotation_mirror(sch, "R1", float(rot), mirror)
+    assert ok is True
+    assert _field_at(sch, "R1", "Reference") == exp_ref
+    # Value is at the lib origin (0,0) so it stays at the symbol origin (100,100)
+    vx, vy, va = _field_at(sch, "R1", "Value")
+    assert (vx, vy) == (100.0, 100.0)
+    assert va == exp_val_ang
