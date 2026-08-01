@@ -21,11 +21,11 @@ export function registerExportTools(server: McpServer, callKicadScript: CommandF
   logger.info("Registering export tools");
 
   // ------------------------------------------------------
-  // Export Gerber Tool
+  // Export Gerber Tool [DEPRECATED — forwards to kicad-cli export_gerbers]
   // ------------------------------------------------------
   server.tool(
     "export_gerber",
-    "Export PCB Gerber manufacturing files to a directory. Optionally include drill files, map files and choose layer subset.",
+    "[DEPRECATED] Use `export_gerbers` (kicad-cli) for the full Plot-dialog option set. This legacy wrapper now forwards to kicad-cli `pcb export gerbers` (+ `pcb export drill` when generateDrillFiles is set), reading the last SAVED .kicad_pcb, so the board must be saved before calling.",
     {
       outputDir: z.string().describe("Directory to save Gerber files"),
       layers: z
@@ -48,15 +48,23 @@ export function registerExportTools(server: McpServer, callKicadScript: CommandF
       generateMapFile,
       useAuxOrigin,
     }) => {
-      logger.debug(`Exporting Gerber files to: ${outputDir}`);
-      const result = await callKicadScript("export_gerber", {
+      logger.debug(`Exporting Gerber files to: ${outputDir} (via kicad-cli)`);
+      const gerberResult = await callKicadScript("export_gerbers", {
         outputDir,
         layers,
-        useProtelExtensions,
-        generateDrillFiles,
-        generateMapFile,
-        useAuxOrigin,
+        noProtelExt: useProtelExtensions === false,
+        useDrillFileOrigin: useAuxOrigin,
+        boardPlotParams: true,
       });
+      let drillResult: any = null;
+      if (generateDrillFiles) {
+        drillResult = await callKicadScript("export_drill", { outputDir });
+      }
+      const result = {
+        ...gerberResult,
+        drill: drillResult,
+        _deprecated: "Use export_gerbers (+ export_drill) for full options.",
+      };
 
       return {
         content: [
@@ -70,11 +78,11 @@ export function registerExportTools(server: McpServer, callKicadScript: CommandF
   );
 
   // ------------------------------------------------------
-  // Export PDF Tool
+  // Export PDF Tool [DEPRECATED — forwards to kicad-cli export_pcb_pdf]
   // ------------------------------------------------------
   server.tool(
     "export_pdf",
-    "Export the PCB layout as a PDF document, optionally selecting layers, page size and colour mode.",
+    "[DEPRECATED] Use `export_pcb_pdf` (kicad-cli) for the full layer-plot option set. This legacy wrapper now forwards to kicad-cli `pcb export pdf`, reading the last SAVED .kicad_pcb, so the board must be saved before calling.",
     {
       outputPath: z.string().describe("Path to save the PDF file"),
       layers: z
@@ -86,18 +94,17 @@ export function registerExportTools(server: McpServer, callKicadScript: CommandF
       pageSize: z
         .enum(["A4", "A3", "A2", "A1", "A0", "Letter", "Legal", "Tabloid"])
         .optional()
-        .describe("Page size"),
+        .describe("Page size (ignored by kicad-cli PDF; use export_pcb_svg for page-size control)"),
     },
     async ({ outputPath, layers, blackAndWhite, frameReference, pageSize }) => {
-      logger.debug(`Exporting PDF to: ${outputPath}`);
-      const result = await callKicadScript("export_pdf", {
+      logger.debug(`Exporting PDF to: ${outputPath} (via kicad-cli)`);
+      const result = await callKicadScript("export_pcb_pdf", {
         outputPath,
         layers,
         blackAndWhite,
-        frameReference,
-        pageSize,
+        includeBorderTitle: frameReference,
+        modeSingle: true,
       });
-
       return {
         content: [
           {
@@ -110,11 +117,11 @@ export function registerExportTools(server: McpServer, callKicadScript: CommandF
   );
 
   // ------------------------------------------------------
-  // Export SVG Tool
+  // Export SVG Tool [DEPRECATED — forwards to kicad-cli export_pcb_svg]
   // ------------------------------------------------------
   server.tool(
     "export_svg",
-    "Export the PCB layout as an SVG vector image, optionally selecting layers and colour mode.",
+    "[DEPRECATED] Use `export_pcb_svg` (kicad-cli) for the full layer-plot option set. This legacy wrapper now forwards to kicad-cli `pcb export svg`, reading the last SAVED .kicad_pcb, so the board must be saved before calling.",
     {
       outputPath: z.string().describe("Path to save the SVG file"),
       layers: z
@@ -125,14 +132,13 @@ export function registerExportTools(server: McpServer, callKicadScript: CommandF
       includeComponents: z.boolean().optional().describe("Whether to include component outlines"),
     },
     async ({ outputPath, layers, blackAndWhite, includeComponents }) => {
-      logger.debug(`Exporting SVG to: ${outputPath}`);
-      const result = await callKicadScript("export_svg", {
+      logger.debug(`Exporting SVG to: ${outputPath} (via kicad-cli)`);
+      const result = await callKicadScript("export_pcb_svg", {
         outputPath,
         layers,
         blackAndWhite,
-        includeComponents,
+        modeSingle: true,
       });
-
       return {
         content: [
           {
@@ -145,11 +151,11 @@ export function registerExportTools(server: McpServer, callKicadScript: CommandF
   );
 
   // ------------------------------------------------------
-  // Export 3D Model Tool
+  // Export 3D Model Tool [DEPRECATED — forwards to kicad-cli export_3d_cli]
   // ------------------------------------------------------
   server.tool(
     "export_3d",
-    "Export the PCB as a 3D model (STEP, STL, VRML or OBJ) including optional copper, solder mask, silkscreen and component 3D models.",
+    "[DEPRECATED] Use `export_3d_cli` (kicad-cli) for the full 3D option set (step/glb/stl/ply/brep/xao/vrml). This legacy wrapper now forwards to kicad-cli, reading the last SAVED .kicad_pcb, so the board must be saved before calling.",
     {
       outputPath: z.string().describe("Path to save the 3D model file"),
       format: z.enum(["STEP", "STL", "VRML", "OBJ"]).describe("3D model format"),
@@ -166,16 +172,22 @@ export function registerExportTools(server: McpServer, callKicadScript: CommandF
       includeSolderMask,
       includeSilkscreen,
     }) => {
-      logger.debug(`Exporting 3D model to: ${outputPath}`);
-      const result = await callKicadScript("export_3d", {
+      logger.debug(`Exporting 3D model to: ${outputPath} (via kicad-cli)`);
+      const fmtMap: Record<string, string> = {
+        STEP: "step",
+        STL: "stl",
+        VRML: "vrml",
+        OBJ: "glb",
+      };
+      const result = await callKicadScript("export_3d_cli", {
         outputPath,
-        format,
-        includeComponents,
-        includeCopper,
-        includeSolderMask,
+        format: fmtMap[format] ?? format.toLowerCase(),
+        noComponents: includeComponents === false,
+        includeTracks: includeCopper,
+        includeZones: includeCopper,
+        includeSoldermask: includeSolderMask,
         includeSilkscreen,
       });
-
       return {
         content: [
           {
@@ -188,11 +200,11 @@ export function registerExportTools(server: McpServer, callKicadScript: CommandF
   );
 
   // ------------------------------------------------------
-  // Export BOM Tool
+  // Export BOM Tool [DEPRECATED — KiCad BOM is a schematic export]
   // ------------------------------------------------------
   server.tool(
     "export_bom",
-    "Export a Bill of Materials (BOM) from the PCB in CSV, XML, HTML or JSON format.",
+    "[DEPRECATED] KiCad's BOM is a schematic export (`sch export bom`), not a PCB export — the PCB path lacks MPN/LCSC fields. Use `export_sch_bom` (kicad-cli) with a schematicPath. This legacy PCB-BOM wrapper is kept for compatibility but reads only footprint value/ref from the board.",
     {
       outputPath: z.string().describe("Path to save the BOM file"),
       format: z.enum(["CSV", "XML", "HTML", "JSON"]).describe("BOM file format"),
@@ -203,14 +215,17 @@ export function registerExportTools(server: McpServer, callKicadScript: CommandF
         .describe("Optional array of additional attributes to include"),
     },
     async ({ outputPath, format, groupByValue, includeAttributes }) => {
-      logger.debug(`Exporting BOM to: ${outputPath}`);
+      logger.debug(`Exporting BOM to: ${outputPath} (legacy PCB path)`);
       const result = await callKicadScript("export_bom", {
         outputPath,
         format,
         groupByValue,
         includeAttributes,
       });
-
+      if (result && typeof result === "object") {
+        result._deprecated =
+          "PCB BOM lacks schematic fields. Prefer export_sch_bom with a schematicPath.";
+      }
       return {
         content: [
           {
@@ -256,11 +271,11 @@ export function registerExportTools(server: McpServer, callKicadScript: CommandF
   );
 
   // ------------------------------------------------------
-  // Export Position File Tool
+  // Export Position File Tool [DEPRECATED — forwards to kicad-cli export_pos]
   // ------------------------------------------------------
   server.tool(
     "export_position_file",
-    "Export a component placement/position file (pick-and-place) for PCB assembly in CSV or ASCII format.",
+    "[DEPRECATED] Use `export_pos` (kicad-cli) for the full pick-and-place option set. This legacy wrapper now forwards to kicad-cli `pcb export pos`, reading the last SAVED .kicad_pcb, so the board must be saved before calling.",
     {
       outputPath: z.string().describe("Path to save the position file"),
       format: z.enum(["CSV", "ASCII"]).optional().describe("File format (default: CSV)"),
@@ -271,14 +286,15 @@ export function registerExportTools(server: McpServer, callKicadScript: CommandF
         .describe("Which board side to include (default: both)"),
     },
     async ({ outputPath, format, units, side }) => {
-      logger.debug(`Exporting position file to: ${outputPath}`);
-      const result = await callKicadScript("export_position_file", {
+      logger.debug(`Exporting position file to: ${outputPath} (via kicad-cli)`);
+      const sideMap: Record<string, string> = { top: "front", bottom: "back", both: "both" };
+      const unitsMap: Record<string, string> = { mm: "mm", inch: "in", mil: "in" };
+      const result = await callKicadScript("export_pos", {
         outputPath,
-        format,
-        units,
-        side,
+        format: format ? format.toLowerCase() : undefined,
+        units: units ? unitsMap[units] ?? "mm" : undefined,
+        side: side ? sideMap[side] ?? side : undefined,
       });
-
       return {
         content: [
           {
@@ -291,11 +307,11 @@ export function registerExportTools(server: McpServer, callKicadScript: CommandF
   );
 
   // ------------------------------------------------------
-  // Export VRML Tool
+  // Export VRML Tool [DEPRECATED — forwards to kicad-cli export_3d_cli]
   // ------------------------------------------------------
   server.tool(
     "export_vrml",
-    "Export the PCB as a VRML 3D model for use in web viewers or simulation tools.",
+    "[DEPRECATED] Use `export_3d_cli` with format='vrml' (kicad-cli) for the full VRML option set (units, models-dir, models-relative). This legacy wrapper now forwards to kicad-cli, reading the last SAVED .kicad_pcb, so the board must be saved before calling.",
     {
       outputPath: z.string().describe("Path to save the VRML file"),
       includeComponents: z.boolean().optional().describe("Whether to include 3D component models"),
@@ -305,13 +321,13 @@ export function registerExportTools(server: McpServer, callKicadScript: CommandF
         .describe("Whether to use relative paths for 3D models"),
     },
     async ({ outputPath, includeComponents, useRelativePaths }) => {
-      logger.debug(`Exporting VRML to: ${outputPath}`);
-      const result = await callKicadScript("export_vrml", {
+      logger.debug(`Exporting VRML to: ${outputPath} (via kicad-cli)`);
+      const result = await callKicadScript("export_3d_cli", {
         outputPath,
-        includeComponents,
-        useRelativePaths,
+        format: "vrml",
+        noComponents: includeComponents === false,
+        modelsRelative: useRelativePaths,
       });
-
       return {
         content: [
           {
@@ -484,6 +500,15 @@ export function registerExportTools(server: McpServer, callKicadScript: CommandF
         .optional()
         .describe("Schematic field to use for the BOM Distributor Part Number column"),
       bomColDist: z.string().optional().describe("Value to insert into the BOM Distributor column"),
+      bomRev: z
+        .string()
+        .optional()
+        .describe("BOM revision to use in the output file (defaults to the schematic revision)"),
+      variant: z
+        .array(z.string())
+        .optional()
+        .describe("Assembly variant name(s); use ${VARIANT} in outputPath for per-variant files"),
+      timeoutSec: z.number().optional().describe("kicad-cli timeout in seconds (default 180, clamped 30-1800)"),
     },
     async (args) => {
       logger.debug(`Exporting IPC-2581 to: ${args.outputPath}`);
@@ -519,6 +544,15 @@ export function registerExportTools(server: McpServer, callKicadScript: CommandF
         .optional()
         .describe("Output container/compression mode (default zip)"),
       units: z.enum(["mm", "in"]).optional().describe("Units (default mm)"),
+      checkZones: z
+        .boolean()
+        .optional()
+        .describe("Check and refill zones if required before export"),
+      variant: z
+        .array(z.string())
+        .optional()
+        .describe("Assembly variant name(s); use ${VARIANT} in outputPath for per-variant files"),
+      timeoutSec: z.number().optional().describe("kicad-cli timeout in seconds (default 180, clamped 30-1800)"),
     },
     async (args) => {
       logger.debug(`Exporting ODB++ to: ${args.outputPath}`);
@@ -1022,6 +1056,236 @@ export function registerExportTools(server: McpServer, callKicadScript: CommandF
     async (args) => {
       logger.debug(`Exporting 3D model (${args.format}) to: ${args.outputPath}`);
       const result = await callKicadScript("export_3d_cli", args);
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(result),
+          },
+        ],
+      };
+    },
+  );
+
+  // ------------------------------------------------------
+  // Export PCB 3D Render Tool (kicad-cli pcb render)
+  // ------------------------------------------------------
+  server.tool(
+    "export_pcb_render",
+    "Render the PCB in 3D to a PNG or JPEG image via kicad-cli `pcb render` (ray-traced 3D view). This is the KiCad-native way to produce a board image — there is no `pcb export png`. Supports width/height, side (top/bottom/left/right/front/back), background, quality (basic/high/user/job_settings), preset, perspective, zoom/pan/pivot/rotate, light intensities, board-stackup colors and floor. Reads the last SAVED .kicad_pcb.",
+    {
+      outputPath: z.string().describe("Output image file path (.png or .jpg/.jpeg)"),
+      boardPath: z.string().optional().describe("Path to the .kicad_pcb (default: current board)"),
+      defineVar: z
+        .array(z.string())
+        .optional()
+        .describe("Project variable overrides as 'KEY=VALUE' strings"),
+      variant: z
+        .array(z.string())
+        .optional()
+        .describe("Variant name(s); use ${VARIANT} in outputPath to emit per-variant files"),
+      width: z.number().optional().describe("Image width in pixels (default 1600)"),
+      height: z.number().optional().describe("Image height in pixels (default 900)"),
+      side: z
+        .enum(["top", "bottom", "left", "right", "front", "back"])
+        .optional()
+        .describe("Render side (default top)"),
+      background: z
+        .enum(["default", "transparent", "opaque"])
+        .optional()
+        .describe("Image background (default transparent for PNG, opaque for JPEG)"),
+      quality: z
+        .enum(["basic", "high", "user", "job_settings"])
+        .optional()
+        .describe("Render quality (default basic)"),
+      preset: z
+        .string()
+        .optional()
+        .describe("Appearance preset: follow_pcb_editor, follow_plot_settings, or a user preset name"),
+      useBoardStackupColors: z
+        .boolean()
+        .optional()
+        .describe("Use colors defined in the board stackup instead of the preset"),
+      floor: z
+        .boolean()
+        .optional()
+        .describe("Enable floor, shadows and post-processing even if disabled in quality"),
+      perspective: z.boolean().optional().describe("Use perspective projection instead of orthogonal"),
+      zoom: z.number().optional().describe("Camera zoom (default 1)"),
+      pan: z
+        .string()
+        .optional()
+        .describe("Pan camera 'X,Y,Z' e.g. '3,0,0'"),
+      pivot: z
+        .string()
+        .optional()
+        .describe("Pivot point relative to board center in cm 'X,Y,Z' e.g. '-10,2,0'"),
+      rotate: z
+        .string()
+        .optional()
+        .describe("Rotate board 'X,Y,Z' degrees e.g. '-45,0,45' for isometric"),
+      lightTop: z
+        .string()
+        .optional()
+        .describe("Top light intensity 'R,G,B' or single number 0-1"),
+      lightBottom: z
+        .string()
+        .optional()
+        .describe("Bottom light intensity 'R,G,B' or single number 0-1"),
+      lightSide: z
+        .string()
+        .optional()
+        .describe("Side lights intensity 'R,G,B' or single number 0-1"),
+      lightCamera: z
+        .string()
+        .optional()
+        .describe("Camera light intensity 'R,G,B' or single number 0-1"),
+      lightSideElevation: z
+        .number()
+        .optional()
+        .describe("Side lights elevation angle in degrees 0-90 (default 60)"),
+      timeoutSec: z.number().optional().describe("kicad-cli timeout in seconds (default 300, clamped 30-1800)"),
+    },
+    async (args) => {
+      logger.debug(`Rendering PCB 3D image to: ${args.outputPath}`);
+      const result = await callKicadScript("export_pcb_render", args);
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(result),
+          },
+        ],
+      };
+    },
+  );
+
+  // ------------------------------------------------------
+  // Get Board Stats Tool (kicad-cli pcb export stats)
+  // ------------------------------------------------------
+  server.tool(
+    "get_board_stats",
+    "Generate a board statistics report via kicad-cli `pcb export stats`: board/copper area, hole count, footprint count, net count, etc. Useful for cost estimation and CI gate checks. Output JSON (default, returned parsed) or a human-readable report. Reads the last SAVED .kicad_pcb.",
+    {
+      boardPath: z.string().optional().describe("Path to the .kicad_pcb (default: current board)"),
+      outputPath: z
+        .string()
+        .optional()
+        .describe("Output file path; if omitted and format=json, a temp file is used and parsed inline"),
+      format: z
+        .enum(["json", "report"])
+        .optional()
+        .describe("Output format (default json; report returns stdout text)"),
+      units: z.enum(["in", "mm"]).optional().describe("Report units (default mm)"),
+      excludeFootprintsWithoutPads: z
+        .boolean()
+        .optional()
+        .describe("Exclude footprints without pads"),
+      subtractHolesFromBoard: z
+        .boolean()
+        .optional()
+        .describe("Subtract holes from the board area"),
+      subtractHolesFromCopper: z
+        .boolean()
+        .optional()
+        .describe("Subtract holes from copper areas"),
+      timeoutSec: z.number().optional().describe("kicad-cli timeout in seconds (default 120, clamped 10-1800)"),
+    },
+    async (args) => {
+      logger.debug(`Getting board stats`);
+      const result = await callKicadScript("get_board_stats", args);
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(result),
+          },
+        ],
+      };
+    },
+  );
+
+  // ------------------------------------------------------
+  // Run Jobset Tool (kicad-cli jobset run)
+  // ------------------------------------------------------
+  server.tool(
+    "run_jobset",
+    "Run a KiCad jobset (.kicad_jobset) via kicad-cli `jobset run`, executing the full job chain (DRC/ERC, Gerber/drill/PDF/3D exports, etc.) in one shot — ideal for CI/CD manufacturing delivery. INPUT_FILE is the .kicad_pro project. Reads the last SAVED project.",
+    {
+      projectPath: z.string().describe("Path to the .kicad_pro project file (required)"),
+      jobsetFile: z
+        .string()
+        .optional()
+        .describe("Path to a .kicad_jobset file (default: the project's stored jobset)"),
+      output: z
+        .string()
+        .optional()
+        .describe("Name of a single jobset output to generate (default: all outputs in the jobset)"),
+      stopOnError: z
+        .boolean()
+        .optional()
+        .describe("Stop processing jobs on the first failure"),
+      timeoutSec: z.number().optional().describe("kicad-cli timeout in seconds (default 600, clamped 30-3600)"),
+    },
+    async (args) => {
+      logger.debug(`Running jobset for: ${args.projectPath}`);
+      const result = await callKicadScript("run_jobset", args);
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(result),
+          },
+        ],
+      };
+    },
+  );
+
+  // ------------------------------------------------------
+  // Upgrade Schematic Tool (kicad-cli sch upgrade)
+  // ------------------------------------------------------
+  server.tool(
+    "upgrade_schematic",
+    "Upgrade a .kicad_sch file's format to the latest via kicad-cli `sch upgrade`, resaving in the current KiCad S-expression format. Use force to resave regardless of versioning. Useful to normalize older files before editing and to reduce kicad-skip compatibility issues.",
+    {
+      inputPath: z.string().describe("Path to the .kicad_sch file (required)"),
+      force: z
+        .boolean()
+        .optional()
+        .describe("Force resave regardless of versioning"),
+      timeoutSec: z.number().optional().describe("kicad-cli timeout in seconds (default 180, clamped 15-1800)"),
+    },
+    async (args) => {
+      logger.debug(`Upgrading schematic: ${args.inputPath}`);
+      const result = await callKicadScript("upgrade_schematic", args);
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(result),
+          },
+        ],
+      };
+    },
+  );
+
+  // ------------------------------------------------------
+  // Upgrade Board Tool (kicad-cli pcb upgrade)
+  // ------------------------------------------------------
+  server.tool(
+    "upgrade_board",
+    "Upgrade a .kicad_pcb file's format to the latest via kicad-cli `pcb upgrade`, resaving in the current KiCad S-expression format. Use force to resave regardless of versioning. Useful to normalize older files before editing and to reduce kicad-skip compatibility issues.",
+    {
+      inputPath: z.string().describe("Path to the .kicad_pcb file (required)"),
+      force: z
+        .boolean()
+        .optional()
+        .describe("Force resave regardless of versioning"),
+      timeoutSec: z.number().optional().describe("kicad-cli timeout in seconds (default 180, clamped 15-1800)"),
+    },
+    async (args) => {
+      logger.debug(`Upgrading board: ${args.inputPath}`);
+      const result = await callKicadScript("upgrade_board", args);
       return {
         content: [
           {

@@ -2,13 +2,13 @@
 
 https://github.com/mixelpixx/KiCAD-MCP-Server/discussions/73
 
-> ## 🚀 Meet Konnect — the next generation
+> ## ?? Meet Konnect ??the next generation
 >
 > **[Konnect](https://github.com/mixelpixx/Konnect)** is this project rebuilt from
 > scratch in Rust as a native KiCAD 10 plugin: a single binary with no runtime
 > dependencies, built on KiCAD's official IPC API instead of SWIG, with 171 tools,
 > bundled Claude skills and agents, design-review audits, and a manufacturing
-> pipeline. It's where new development happens — licensed AGPL-3.0 (free for
+> pipeline. It's where new development happens ??licensed AGPL-3.0 (free for
 > individuals and open source; commercial licenses available for businesses).
 >
 > This Python/TypeScript server remains fully open (MIT) and maintained.
@@ -23,7 +23,7 @@ The [Model Context Protocol](https://modelcontextprotocol.io/) is an open standa
 
 **Key Capabilities:**
 
-- 146 tools across 13 categories with JSON Schema validation
+- 151 tools across 13 categories with JSON Schema validation
 - Keyword tool discovery via `search_tools` / `get_category_tools`
 - 8 dynamic resources exposing project state
 - Complete schematic workflow with 27 tools and dynamic symbol loading (~10,000 symbols)
@@ -44,8 +44,7 @@ https://github.com/mixelpixx/arduino-ide
 
 ### A session-killing bug is fixed
 
-Deleting anything from a board — a component, a trace, a board outline —
-worked exactly once. The next operation, even a pure read, failed with a
+Deleting anything from a board ??a component, a trace, a board outline ??worked exactly once. The next operation, even a pure read, failed with a
 `SwigPyObject` error, and only `close_project` then `open_project` recovered.
 `BOARD.Remove()` hands C++ ownership to Python, so dropping the reference ran
 a destructor on an object KiCad still pointed at, corrupting SWIG state
@@ -95,7 +94,7 @@ Full details in the [CHANGELOG](CHANGELOG.md).
 
 All of them respect backend session pinning, so a board saved while KiCad's
 GUI owns the session routes to the GUI rather than writing a stale in-memory
-copy — including the awkward case where `save_as` changes the board's
+copy ??including the awkward case where `save_as` changes the board's
 identity mid-session.
 
 ### Formatting is normalized and enforced
@@ -119,7 +118,7 @@ Full details in the [CHANGELOG](CHANGELOG.md).
   a full schema and a router entry but no dispatch handler, so every call
   returned `Unknown command`. Found by a documentation-coverage audit.
 - Per-layer constraints are written to a project-scoped `.kicad_dru`
-  custom-rules file, which `kicad-cli pcb drc` and the GUI both pick up — there
+  custom-rules file, which `kicad-cli pcb drc` and the GUI both pick up ??there
   is no pcbnew API for them.
 
 ### Silent failures removed
@@ -128,7 +127,7 @@ Full details in the [CHANGELOG](CHANGELOG.md).
   still running, reporting failure against a valid `.ses` that existed on disk.
   Its timeout now derives from the `timeout` and `attempts` you pass.
 - `get_board_2d_view` omitted `--layers` entirely when no layers were given,
-  and KiCad 9+ then refuses the export — producing no file at all.
+  and KiCad 9+ then refuses the export ??producing no file at all.
 - `create_zone` raised `AttributeError` on every call over the IPC backend.
 
 ### New part-sourcing tools
@@ -142,7 +141,7 @@ Full details in the [CHANGELOG](CHANGELOG.md).
 ### CI now actually runs the test suite
 
 - The Python job had been a no-op in four independent ways, and Actions was
-  disabled repo-wide — 32 failed runs and 0 successes across the project's
+  disabled repo-wide ??32 failed runs and 0 successes across the project's
   whole history. All 1551 Python and 63 TypeScript tests now gate every push.
 
 Full details in the [CHANGELOG](CHANGELOG.md).
@@ -159,8 +158,7 @@ Full details in the [CHANGELOG](CHANGELOG.md).
   fields (Manufacturer, MPN, LCSC, ...) on a library symbol or on a
   schematic's cached definition.
 - `update_symbol_from_library` refreshes cached `lib_symbols` definitions
-  across one schematic, a list, or every project under a directory —
-  the programmatic equivalent of KiCad's Update Symbol from Library.
+  across one schematic, a list, or every project under a directory ??  the programmatic equivalent of KiCad's Update Symbol from Library.
 - `replace_instance_lib_ids` swaps `lib_id` references per an explicit
   old-to-new mapping, for migrating a schematic between libraries.
 
@@ -174,7 +172,7 @@ Full details in the [CHANGELOG](CHANGELOG.md).
 ### Fixes that restore basic operation
 
 - Every `.kicad_sym` and schematic write raised `TypeError` on Python 3.9, the
-  project's declared floor — `Path.write_text` did not accept `newline` until
+  project's declared floor ??`Path.write_text` did not accept `newline` until
   3.10.
 - JLCPCB part search could not find hyphenated MPNs.
 - Eagle import wrote a KiCad 9 schematic header; it now writes the KiCad 10
@@ -220,11 +218,11 @@ Full details in the [CHANGELOG](CHANGELOG.md).
 
 ## What's New in v2.3.0
 
-### Schematic corruption on KiCad 10 — both mechanisms fixed
+### Schematic corruption on KiCad 10 ??both mechanisms fixed
 
 - **Complete instance blocks**: placed components now carry the real project
   name, root-sheet uuid path, per-pin uuid entries (ERC can bind wires to
-  pins), and the full KiCad 10 field set — verified byte-equivalent to what
+  pins), and the full KiCad 10 field set ??verified byte-equivalent to what
   eeschema itself writes. Previously, dragging or editing a placed symbol
   could crash KiCad.
 - **Canonical multi-line writes**: schematic tools no longer minify the whole
@@ -235,17 +233,17 @@ Full details in the [CHANGELOG](CHANGELOG.md).
 ### Your edits are protected
 
 - **Backend session pinning**: a loaded project stays on one backend
-  (SWIG or IPC) for its whole lifecycle — saves can no longer silently route
+  (SWIG or IPC) for its whole lifecycle ??saves can no longer silently route
   to a stale GUI board and lose your edits.
 - **External-edit guard**: `save_project` refuses to overwrite a board file
   whose contents changed on disk since load (pass `force: true` to override).
 - **`close_project`** (new tool): release the project so files can be edited
-  directly, then reopen — no more restart choreography.
+  directly, then reopen ??no more restart choreography.
 
 ### Works on a stock Windows install
 
 - `kicad-cli` and 7-Zip are resolved from their install locations even when
-  not on PATH — un-breaking exports, ERC/DRC, netlists, board views, and the
+  not on PATH ??un-breaking exports, ERC/DRC, netlists, board views, and the
   JLCPCB database download, each with actionable errors when truly missing.
 
 ### New layout tools
@@ -268,21 +266,21 @@ Vitest suite for the TypeScript layer. Full details in the
 A complete workflow for designing passthrough adapter boards (e.g. Raspberry Pi CSI
 cable adapters) is now supported:
 
-1. `connect_passthrough` — wires all pins of one connector to the matching pins of
-   another in the schematic (J1 pin N → J2 pin N, auto-named nets).
-2. `sync_schematic_to_board` — imports the net assignments into the PCB.
-3. `route_pad_to_pad` — routes each connection with automatic via insertion when
+1. `connect_passthrough` ??wires all pins of one connector to the matching pins of
+   another in the schematic (J1 pin N ??J2 pin N, auto-named nets).
+2. `sync_schematic_to_board` ??imports the net assignments into the PCB.
+3. `route_pad_to_pad` ??routes each connection with automatic via insertion when
    pads are on opposite copper layers.
-4. `snapshot_project` — saves a named checkpoint into `<project>/snapshots/`.
+4. `snapshot_project` ??saves a named checkpoint into `<project>/snapshots/`.
 
 ### Bug Fixes (KiCAD 9 / Windows)
 
-- **Via insertion for B.Cu footprints** — `route_pad_to_pad` now correctly detects
+- **Via insertion for B.Cu footprints** ??`route_pad_to_pad` now correctly detects
   when a footprint is on B.Cu and inserts the required via. (KiCAD 9 SWIG returned
-  `F.Cu` for all SMD pads regardless of layer — fixed.)
-- **Board outline rounded corners** — `add_board_outline` now correctly applies
+  `F.Cu` for all SMD pads regardless of layer ??fixed.)
+- **Board outline rounded corners** ??`add_board_outline` now correctly applies
   `cornerRadius` when `shape="rounded_rectangle"`.
-- **B.Cu placement hang** — placing a footprint on B.Cu no longer causes a ~30s
+- **B.Cu placement hang** ??placing a footprint on B.Cu no longer causes a ~30s
   freeze in KiCAD 9.
 
 ### Developer Mode
@@ -337,7 +335,7 @@ The schematic workflow was completely broken in previous versions - **this is no
 
 **Phase 3: Intelligent Wiring System (NEW in v2.1.0)**
 
-- **Automatic pin location discovery** with rotation support (0°, 90°, 180°, 270°)
+- **Automatic pin location discovery** with rotation support (0?, 90?, 180?, 270?)
 - **Smart wire routing** (direct, orthogonal horizontal-first, orthogonal vertical-first)
 - **Power symbol support** (VCC, GND, +3V3, +5V, etc.)
 - **Wire graph analysis** - geometric tracing for net connectivity
@@ -408,8 +406,9 @@ We are currently implementing and testing the KiCAD 10.0 IPC API for real-time U
 
 Note: IPC features are under active development and testing. Enable IPC in KiCAD via Preferences > Plugins > Enable IPC API Server.
 
-For OpenCode on Windows, the backend can be configured as `auto`, `ipc`, or
-`swig` during setup. See [OpenCode (Windows)](#opencode-windows) for the
+For OpenCode on Windows, the backend can be configured as `auto`, `ipc`,
+`cli`, or `swig` during setup. `cli` is a headless read-only/export backend
+via `kicad-cli` (no editing, not in `auto`). See [OpenCode (Windows)](#opencode-windows) for the
 configuration command and backend options.
 
 ### Tool Discovery & Router Pattern
@@ -486,7 +485,7 @@ Access project state without executing tools:
 
 ## Available Tools
 
-The server exposes every tool directly, so your assistant can call any of them without a discovery step -- just ask for what you want to accomplish. **146 tools** are additionally indexed into 13 functional categories, so `search_tools` and `get_category_tools` can find one by keyword.
+The server exposes every tool directly, so your assistant can call any of them without a discovery step -- just ask for what you want to accomplish. **151 tools** are additionally indexed into 13 functional categories, so `search_tools` and `get_category_tools` can find one by keyword.
 
 For the complete tool reference with access types (direct/routed/additional), see [Tool Inventory](docs/TOOL_INVENTORY.md).
 
@@ -556,7 +555,7 @@ Complete schematic workflow with dynamic symbol loading (~10,000 symbols) and in
 
 - `add_schematic_component` - Place symbols from any KiCad library
 - `delete_schematic_component` - Remove component
-- `edit_schematic_component` - Edit footprint, value, reference, label positions, and **arbitrary custom properties** (MPN, Manufacturer, DigiKey_PN, LCSC, Voltage, Tolerance, Dielectric, …) in one batched call
+- `edit_schematic_component` - Edit footprint, value, reference, label positions, and **arbitrary custom properties** (MPN, Manufacturer, DigiKey_PN, LCSC, Voltage, Tolerance, Dielectric, ?? in one batched call
 - `set_schematic_component_property` - Add or update a single custom property (BOM/sourcing field) on a component
 - `remove_schematic_component_property` - Delete a single custom property from a component
 - `get_schematic_component` - Inspect every field on a component (built-in + custom) including label positions
@@ -597,15 +596,32 @@ See [Schematic Tools Reference](docs/SCHEMATIC_TOOLS_REFERENCE.md) for details a
 - `create_netclass` / `assign_net_to_class` - Net class management
 - `set_layer_constraints` / `check_clearance` - Layer and clearance rules
 
-### Export (8 tools)
+### Export (32 tools)
 
-- `export_gerber` - Gerber fabrication files
-- `export_pdf` / `export_svg` - Documentation and vector graphics
-- `export_3d` - 3D models (STEP, STL, VRML, OBJ)
-- `export_bom` - Bill of materials (CSV, XML, HTML, JSON)
+**kicad-cli backed (preferred):**
+
+- `export_gerbers` / `export_drill` - Gerber & drill fabrication files
+- `export_pcb_pdf` / `export_pcb_svg` / `export_pcb_dxf` - PCB documentation
+- `export_sch_pdf` / `export_sch_svg` / `export_sch_dxf` / `export_sch_hpgl` / `export_sch_ps` - Schematic documentation
+- `export_sch_bom` / `export_sch_python_bom` - Bill of materials (BOM is a schematic export)
+- `export_3d_cli` - 3D models (step/glb/stl/ply/brep/xao/vrml)
+- `export_pcb_render` - 3D ray-traced PNG/JPEG for AI visual review
+- `export_ipc2581` / `export_odb` / `export_ipcd356` / `export_gencad` - Manufacturing interchange (variant/bomRev/checkZones)
+- `export_pos` / `export_gerber_single` - Position file & single-layer Gerber
+- `get_board_stats` - Board statistics (area/holes/nets/footprints) for cost estimation & CI gates
+- `run_jobset` - Run a `.kicad_jobset` job chain (DRC/ERC/Gerber/3D) for CI delivery
+- `upgrade_schematic` / `upgrade_board` - Normalize S-expression to latest format
 - `export_netlist` - Netlist (KiCad, Spice, Cadstar, OrcadPCB2)
-- `export_position_file` - Component positions for pick and place
-- `export_vrml` - VRML 3D model
+
+**Legacy SWIG wrappers (deprecated, forward to the CLI tools above):**
+
+- `export_gerber` ? `export_gerbers`(+`export_drill`)
+- `export_pdf` ? `export_pcb_pdf`
+- `export_svg` ? `export_pcb_svg`
+- `export_3d` ? `export_3d_cli`
+- `export_bom` ? `export_sch_bom`
+- `export_position_file` ? `export_pos`
+- `export_vrml` ? `export_3d_cli` (format=vrml)
 
 ### Footprint Libraries (4 tools) and Symbol Libraries (4 tools)
 
@@ -789,7 +805,7 @@ In case of error `zsh: permission denied: ./setup-macos.sh` you can either:
 - always allow the script to be executed by running: `chmod +x setup-macos.sh`.
 - alternatively explicitly run it with bash: `bash setup-macos.sh` so no chmod change needed.
 
-This script does **not replace the manual setup above** — it assumes dependencies are already installed and the project is built. Instead, it automates:
+This script does **not replace the manual setup above** ??it assumes dependencies are already installed and the project is built. Instead, it automates:
 
 - detection of your environment (Node.js, KiCad Python, `pcbnew`)
 - resolving the correct macOS `PYTHONPATH`
@@ -886,7 +902,7 @@ Example:
 1. Fully quit Claude Desktop
 2. Reopen Claude Desktop
 3. Open a new chat
-4. Click **+ → Connectors**
+4. Click **+ ??Connectors**
 5. Verify the server appears (e.g. `kicad` or your custom name)
 
 Test with prompt in Claude Desktop:
@@ -899,7 +915,7 @@ Use the kicad MCP server to run check_kicad_ui.
 
 - The script only modifies the `mcpServers` section and leaves all other configuration untouched
 - Existing configurations are automatically backed up before changes
-- macOS support relies on KiCad’s bundled Python; system Python will not work correctly
+- macOS support relies on KiCad?s bundled Python; system Python will not work correctly
 - If KiCad is updated or moved, re-run the script to refresh paths
 
 ---
@@ -986,7 +1002,7 @@ cp config/vscode-mcp.example.json .vscode/mcp.json
 
 VS Code will auto-detect `.vscode/mcp.json` and register the server. The template uses `${workspaceFolder}` so no path editing is needed.
 
-> **Note:** `.vscode/mcp.json` is listed in `.gitignore` — your local configuration won't be committed.
+> **Note:** `.vscode/mcp.json` is listed in `.gitignore` ??your local configuration won't be committed.
 
 ### Cline (VSCode)
 
@@ -1021,21 +1037,24 @@ target project:
 
 #### Backend selection
 
-The setup script supports three KiCAD backend preferences via `-Backend`:
+The setup script supports four KiCAD backend preferences via `-Backend`:
 
 - `auto` - try IPC first and fall back to SWIG if IPC is unavailable (default)
 - `ipc` - require KiCAD IPC for real-time UI synchronization
-- `swig` - use the file-based `pcbnew` backend
+- `cli` - headless `kicad-cli` backend (read-only/export/CI; no editing, no KiCad process)
+- `swig` - use the file-based `pcbnew` backend (deprecated but still usable on KiCad 10.0.5)
 
 Examples:
 
 ```powershell
 .\setup-windows-opencode.ps1 -Apply -Scope project -Backend auto
 .\setup-windows-opencode.ps1 -Apply -Scope project -Backend ipc
+.\setup-windows-opencode.ps1 -Apply -Scope project -Backend cli
 .\setup-windows-opencode.ps1 -Apply -Scope project -Backend swig
 ```
 
 For `-Backend ipc`, KiCAD must be running with the IPC API server enabled.
+For `-Backend cli`, only export/DRC/render/stats/jobset/import/upgrade workflows are available (no board editing).
 
 #### Verify setup without changes
 
@@ -1267,7 +1286,7 @@ mkdir -p ~/.kicad-mcp
 curl -L -o ~/.kicad-mcp/freerouting.jar \
   https://github.com/freerouting/freerouting/releases/download/v2.0.1/freerouting-2.0.1-executable.jar
 
-# 2. Runtime — pick ONE:
+# 2. Runtime ??pick ONE:
 #    Option A: Docker (recommended, no Java install needed)
 docker pull eclipse-temurin:21-jre
 
@@ -1386,7 +1405,8 @@ How many Basic parts are available?
 - **kicad_api/:** Backend implementations
   - `base.py` - Abstract base classes for backends
   - `ipc_backend.py` - KiCAD 10.0 IPC API backend (real-time UI sync)
-  - `swig_backend.py` - pcbnew SWIG API backend (file-based operations)
+  - `cli_backend.py` - Headless kicad-cli backend (read-only/export, no editing)
+  - `swig_backend.py` - pcbnew SWIG API backend (file-based operations, deprecated)
   - `factory.py` - Backend auto-detection and instantiation
 - **schemas/tool_schemas.py:** JSON Schema definitions for all tools
 - **resources/resource_definitions.py:** Resource handlers and URIs
@@ -1405,9 +1425,10 @@ How many Basic parts are available?
 
 ### KiCAD Integration
 
-- **pcbnew API (SWIG):** Direct Python bindings to KiCAD for file operations
-- **IPC API (kipy):** Real-time communication with running KiCAD instance (experimental)
-- **Hybrid Backend:** Automatically uses IPC when available, falls back to SWIG
+- **pcbnew API (SWIG):** Direct Python bindings to KiCAD for file operations (deprecated but still usable on KiCad 10.0.5)
+- **IPC API (kipy):** Real-time communication with running KiCAD instance (preferred for editing)
+- **kicad-cli (CLI backend):** Headless official binary for export/DRC/render/stats/jobset/import/upgrade (no GUI, no editing)
+- **Hybrid Backend:** `auto` uses IPC when available, falls back to SWIG; `cli` is opt-in for headless CI
 - **kicad-skip:** Schematic file manipulation
 - **Platform Detection:** Cross-platform path handling
 - **UI Management:** Automatic KiCAD UI launch/detection
@@ -1513,7 +1534,7 @@ pnpm run format
 
 See [STATUS_SUMMARY.md](docs/STATUS_SUMMARY.md) for the complete status matrix and [CHANGELOG.md](CHANGELOG.md) for detailed release notes.
 
-**Working Features (146 tools):**
+**Working Features (151 tools):**
 
 - Project management with snapshot checkpointing
 - Complete board design (outline, layers, zones, mounting holes, text, SVG logos)
@@ -1535,8 +1556,14 @@ See [STATUS_SUMMARY.md](docs/STATUS_SUMMARY.md) for the complete status matrix a
 **IPC Backend (Experimental):**
 
 - Real-time UI synchronization via the KiCAD IPC API
-- 21 IPC-enabled commands with automatic SWIG fallback
+- IPC-enabled editing commands (place/move/track/via/delete/refill) with automatic SWIG fallback
 - Hybrid footprint loading (SWIG for library access, IPC for placement)
+
+**CLI Backend (Headless, read-only):**
+
+- Official `kicad-cli` binary for GUI-less export/DRC/render/stats/jobset/import/upgrade
+- Opt-in via `KICAD_BACKEND=cli`; not in `auto` (cannot edit boards)
+- See `docs/PHASE3_ASSESSMENT.md` for the headless editing path & SWIG retirement rationale
 
 **Developer Mode:**
 Set `KICAD_MCP_DEV=1` to capture MCP session logs for debugging. See CHANGELOG v2.2.3 for details.

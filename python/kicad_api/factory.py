@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Optional
 
 from kicad_api.base import APINotAvailableError, KiCADBackend
+from utils.kicad_cli import resolve_kicad_cli
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +22,7 @@ def create_backend(backend_type: Optional[str] = None) -> KiCADBackend:
     Args:
         backend_type: Backend to use:
             - 'ipc': Use IPC API (recommended)
+            - 'cli': Use headless kicad-cli (read-only/export only, no editing)
             - 'swig': Use legacy SWIG bindings
             - None or 'auto': Auto-detect (try IPC first, fall back to SWIG)
 
@@ -31,7 +33,7 @@ def create_backend(backend_type: Optional[str] = None) -> KiCADBackend:
         APINotAvailableError: If no backend is available
 
     Environment Variables:
-        KICAD_BACKEND: Override backend selection ('ipc', 'swig', or 'auto')
+        KICAD_BACKEND: Override backend selection ('ipc', 'cli', 'swig', or 'auto')
     """
     # Check environment variable override
     if backend_type is None:
@@ -42,12 +44,34 @@ def create_backend(backend_type: Optional[str] = None) -> KiCADBackend:
     # Try specific backend if requested
     if backend_type == "ipc":
         return _create_ipc_backend()
+    elif backend_type == "cli":
+        return _create_cli_backend()
     elif backend_type == "swig":
         return _create_swig_backend()
     elif backend_type == "auto":
         return _auto_detect_backend()
     else:
         raise ValueError(f"Unknown backend type: {backend_type}")
+
+
+def _create_cli_backend() -> KiCADBackend:
+    """
+    Create the headless kicad-cli backend (read-only/export).
+
+    The CLI backend wraps the official ``kicad-cli`` binary for GUI-less
+    export/DRC/render/stats/jobset/import/upgrade workflows. It cannot edit
+    boards (no in-memory board handle), so it is intentionally excluded from
+    ``auto`` mode. Select it explicitly with ``backend_type='cli'`` for CI and
+    automation where no KiCad process is running.
+    """
+    try:
+        from kicad_api.cli_backend import CLIBackend
+
+        logger.info("Creating CLI backend (headless, read-only)")
+        return CLIBackend()
+    except ImportError as e:
+        logger.error(f"CLI backend not available: {e}")
+        raise APINotAvailableError("CLI backend could not be initialized.") from e
 
 
 def _create_ipc_backend() -> KiCADBackend:
@@ -87,8 +111,10 @@ def _create_swig_backend() -> KiCADBackend:
 
         logger.info("Creating SWIG backend")
         logger.warning(
-            "SWIG backend is DEPRECATED and will be removed in KiCAD 10.0. "
-            "Please migrate to IPC backend."
+            "SWIG backend is DEPRECATED. As of KiCad 10.0.5 the pcbnew SWIG "
+            "module is still present and usable, but no longer receives new "
+            "features; prefer the IPC backend. SWIG will be retired once the "
+            "IPC backend covers footprint-library loading without SWIG."
         )
         return SWIGBackend()
     except ImportError as e:
@@ -164,6 +190,16 @@ def get_available_backends() -> dict:
         results["ipc"] = {"available": True, "version": getattr(kipy, "__version__", "unknown")}
     except ImportError:
         results["ipc"] = {"available": False, "version": None}
+
+    # Check CLI (kicad-cli binary)
+    try:
+        cli = resolve_kicad_cli()
+        if cli:
+            results["cli"] = {"available": True, "version": "kicad-cli found"}
+        else:
+            results["cli"] = {"available": False, "version": None}
+    except Exception:
+        results["cli"] = {"available": False, "version": None}
 
     # Check SWIG
     try:

@@ -57,13 +57,23 @@
 - [x] Project-local library resolution
 - [x] Developer mode (KICAD_MCP_DEV=1)
 
+### v2.7.0 - CLI-First Export & Headless CI (August 2026)
+
+- [x] Deprecated 7 legacy SWIG export wrappers (`export_gerber/pdf/svg/3d/bom/position_file/vrml`) — now forward to their kicad-cli siblings (reads last SAVED `.kicad_pcb`)
+- [x] `run_cli` generic wrapper in `python/utils/kicad_cli.py` (unified path/timeout/log/error handling)
+- [x] New kicad-cli tools: `export_pcb_render` (3D ray-traced PNG/JPEG), `get_board_stats` (board statistics), `run_jobset` (jobset job chain), `upgrade_schematic`/`upgrade_board` (format normalization)
+- [x] Completed IPC-2581/ODB parameters (`--variant`, `--bom-rev`, `--check-zones`) and rewrote handlers on `run_cli`
+- [x] New `CLIBackend` (`python/kicad_api/cli_backend.py`) — headless read-only/export backend via `kicad-cli`; opt-in via `backend_type='cli'` (not in `auto`, since it cannot edit)
+- [x] Corrected stale "SWIG will be removed in 10.0" warnings — KiCad 10.0.5 still ships pcbnew; SWIG retained for compatibility until kipy covers footprint-library loading
+- [x] Verified against KiCad 10.0.5 `kicad-cli` actual behavior: no `pcb/sch export png`, no `pcb/sch/gerber diff`, no `sch import`, no `api-server` subcommand — plan assumptions corrected to match the binary
+
 ---
 
 ## Current Focus: v2.3+
 
 ### Documentation Overhaul (In Progress)
 
-- [ ] Per-feature documentation for all 122 tools
+- [ ] Per-feature documentation for all 151 tools
 - [ ] Architecture guide for contributors
 - [ ] End-to-end PCB design workflow guide
 - [ ] Documentation index

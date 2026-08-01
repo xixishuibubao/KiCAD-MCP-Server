@@ -1,8 +1,8 @@
 # KiCAD MCP Server - Complete Tool Inventory
 
 **Version:** 2.1.0-alpha
-**Total Tools:** 137 (verifiziert via VS Code MCP Discovery Log)
-**Last Updated:** 2026-05-02
+**Total Tools:** 151 (per `getRegistryStats()` in `src/tools/registry.ts`)
+**Last Updated:** 2026-08-01
 
 ## How Tools Are Organized
 
@@ -115,20 +115,46 @@ _Source: `src/tools/design-rules.ts`_
 
 ---
 
-## Export (8 tools)
+## Export (32 tools)
 
 _Source: `src/tools/export.ts`_
 
+Tools marked **[DEPRECATED]** are legacy SWIG wrappers that now forward to their kicad-cli sibling (reading the last SAVED `.kicad_pcb`); prefer the CLI tool directly.
+
 | Tool                   | Description                                       | Access          |
 | ---------------------- | ------------------------------------------------- | --------------- |
-| `export_gerber`        | Export Gerber files for fabrication               | Routed (export) |
-| `export_pdf`           | Export PDF with layer selection and page size     | Routed (export) |
-| `export_svg`           | Export SVG vector graphics                        | Routed (export) |
-| `export_3d`            | Export 3D model (STEP, STL, VRML, OBJ)            | Routed (export) |
-| `export_bom`           | Export Bill of Materials (CSV, XML, HTML, JSON)   | Routed (export) |
-| `export_netlist`       | Export netlist (KiCad, Spice, Cadstar, OrcadPCB2) | Routed (export) |
-| `export_position_file` | Export component position file for pick and place | Routed (export) |
-| `export_vrml`          | Export VRML 3D model                              | Routed (export) |
+| `export_gerbers`       | Plot Gerbers via kicad-cli (full Plot-dialog set) | Routed (export) |
+| `export_drill`         | Generate drill files via kicad-cli                | Routed (export) |
+| `export_ipc2581`       | Export IPC-2581 (variant/bomRev/bom-col supported) | Routed (export) |
+| `export_odb`           | Export ODB++ (variant/checkZones supported)        | Routed (export) |
+| `export_ipcd356`       | Generate IPC-D-356 netlist                        | Routed (export) |
+| `export_gencad`        | Export GenCAD format                              | Routed (export) |
+| `export_pos`           | Generate position/pick-and-place file             | Routed (export) |
+| `export_pcb_pdf`       | Plot PCB to PDF via kicad-cli                      | Routed (export) |
+| `export_pcb_svg`       | Plot PCB to SVG via kicad-cli                      | Routed (export) |
+| `export_pcb_dxf`       | Plot PCB to DXF                                   | Routed (export) |
+| `export_gerber_single` | Plot a single Gerber layer                        | Routed (export) |
+| `export_3d_cli`        | Export 3D model (step/glb/stl/ply/brep/xao/vrml)  | Routed (export) |
+| `export_pcb_render`    | 3D ray-traced PNG/JPEG via kicad-cli `pcb render`   | Routed (export) |
+| `get_board_stats`      | Board statistics (area/holes/nets/footprints)      | Routed (export) |
+| `run_jobset`           | Run a .kicad_jobset job chain (CI delivery)        | Routed (export) |
+| `upgrade_schematic`    | Upgrade .kicad_sch to latest format               | Routed (export) |
+| `upgrade_board`        | Upgrade .kicad_pcb to latest format               | Routed (export) |
+| `export_sch_bom`       | BOM from schematic via kicad-cli                   | Routed (export) |
+| `export_sch_pdf`       | Export schematic PDF                              | Routed (export) |
+| `export_sch_svg`       | Export schematic SVG                              | Routed (export) |
+| `export_sch_dxf`       | Export schematic DXF                              | Routed (export) |
+| `export_sch_hpgl`      | Export schematic HPGL                             | Routed (export) |
+| `export_sch_ps`        | Export schematic PostScript                       | Routed (export) |
+| `export_sch_python_bom`| Export legacy Python BOM XML                       | Routed (export) |
+| `export_netlist`       | Export netlist (KiCad/Spice/Cadstar/OrcadPCB2)    | Routed (export) |
+| `export_gerber`        | **[DEPRECATED]** → `export_gerbers`(+`export_drill`) | Routed (export) |
+| `export_pdf`           | **[DEPRECATED]** → `export_pcb_pdf`               | Routed (export) |
+| `export_svg`           | **[DEPRECATED]** → `export_pcb_svg`                | Routed (export) |
+| `export_3d`            | **[DEPRECATED]** → `export_3d_cli`                | Routed (export) |
+| `export_bom`           | **[DEPRECATED]** → `export_sch_bom` (BOM is a sch export) | Routed (export) |
+| `export_position_file` | **[DEPRECATED]** → `export_pos`                    | Routed (export) |
+| `export_vrml`          | **[DEPRECATED]** → `export_3d_cli` (format=vrml)   | Routed (export) |
 
 ---
 
@@ -357,7 +383,7 @@ Registriert via `registerRouterTools()` in `src/server.ts`. Ermöglichen Tool-Di
 | Component Management | 16         |
 | Routing              | 13         |
 | Design Rules / DRC   | 8          |
-| Export               | 8          |
+| Export               | 32         |
 | Schematic            | 43         |
 | Footprint Libraries  | 4          |
 | Symbol Libraries     | 4          |
@@ -368,10 +394,10 @@ Registriert via `registerRouterTools()` in `src/server.ts`. Ermöglichen Tool-Di
 | Freerouting          | 4          |
 | UI Management        | 2          |
 | Router / Discovery   | 3          |
-| **Total registered** | **137**    |
+| **Total registered** | **151**    |
 
-> **Verified:** VS Code MCP Discovery Log meldet **137** registrierte Tools.
+> **Verified:** `getRegistryStats()` in `src/tools/registry.ts` reports **151** registered tools. Category counts other than Export are inherited from the prior inventory pass and may need re-verification.
 
 ## Token Impact
 
-Alle 137 registrierten Tools sind stets für den LLM sichtbar. Die Discovery-Tools in `router.ts` ermöglichen dem Modell, Tools nach Kategorie oder Stichwort zu durchsuchen.
+Alle 151 registrierten Tools sind stets für den LLM sichtbar. Die Discovery-Tools in `router.ts` ermöglichen dem Modell, Tools nach Kategorie oder Stichwort zu durchsuchen.

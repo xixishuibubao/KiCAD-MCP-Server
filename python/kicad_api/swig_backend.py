@@ -4,9 +4,11 @@ SWIG Backend (Legacy - DEPRECATED)
 Uses the legacy SWIG-based pcbnew Python bindings.
 This backend wraps the existing implementation for backward compatibility.
 
-WARNING: SWIG bindings are deprecated as of KiCAD 9.0
-         and will be removed in KiCAD 10.0.
-         Please migrate to IPC backend.
+WARNING: SWIG bindings are deprecated as of KiCAD 9.0.
+         As of KiCad 10.0.5 the pcbnew SWIG module is still present and
+         usable, but no longer receives new features; prefer the IPC backend.
+         SWIG will be retired once the IPC backend covers footprint-library
+         loading without SWIG.
 """
 
 import logging
@@ -30,9 +32,10 @@ class SWIGBackend(KiCADBackend):
         self._connected = False
         self._pcbnew = None
         logger.warning(
-            "⚠️ Using DEPRECATED SWIG backend. "
-            "This will be removed in KiCAD 10.0. "
-            "Please migrate to IPC API."
+            "⚠️ Using DEPRECATED SWIG backend. As of KiCad 10.0.5 the pcbnew "
+            "SWIG module is still present and usable, but no longer receives "
+            "new features; prefer the IPC backend. SWIG will be retired once "
+            "the IPC backend covers footprint-library loading without SWIG."
         )
 
     def connect(self) -> bool:

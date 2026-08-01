@@ -10,7 +10,7 @@
 
 | Metric               | Value                       |
 | -------------------- | --------------------------- |
-| Total MCP Tools      | 122                         |
+| Total MCP Tools      | 151                         |
 | Tool Categories      | 16                          |
 | KiCAD 10.0 Compatible | Yes (verified)              |
 | Platforms            | Linux, Windows, macOS       |
@@ -31,7 +31,7 @@
 | Component Placement | Complete | 16         | Place, move, rotate, delete, edit, find, pads, arrays, align, duplicate |
 | Routing             | Complete | 13         | Traces, vias, pad-to-pad, differential pairs, netclasses, copy pattern  |
 | Design Rules / DRC  | Complete | 8          | Set/get rules, DRC, net classes, clearance checks                       |
-| Export              | Complete | 8          | Gerber, PDF, SVG, 3D, BOM, netlist, position file, VRML                 |
+| Export              | Complete | 32         | Gerbers/drill/PDF/SVG/DXF/3D/BOM/IPC-2581/ODB/IPC-D-356/GenCAD/pos/render/stats/jobset/upgrade (7 legacy SWIG wrappers deprecated → CLI) |
 | Schematic           | Complete | 27         | Components, wiring, net labels, connections, ERC, export, sync to board |
 | Footprint Libraries | Complete | 4          | List, search, browse, info                                              |
 | Symbol Libraries    | Complete | 4          | List, search, browse, info                                              |
@@ -47,28 +47,35 @@
 
 ## Architecture
 
-### SWIG Backend (File-based) -- Default
+### IPC Backend (Real-time) -- Preferred
 
-- **Status:** Stable
-- Direct pcbnew API access via KiCAD's Python bindings
-- Requires manual KiCAD UI reload to see changes
-- Works without KiCAD running
-- Auto-saves after every board-modifying command
-
-### IPC Backend (Real-time) -- Experimental
-
-- **Status:** Functional, 21 commands implemented
-- Real-time UI synchronization with KiCAD 10.0+
+- **Status:** Functional, covers project/board/component/routing/zone editing (place/move/track/via/delete/refill)
+- Real-time UI synchronization with KiCAD 10.0+ via kipy
 - Requires KiCAD running with IPC API enabled
-- Automatic fallback to SWIG when unavailable
+- `place_component` uses a hybrid path (SWIG footprint-library load + IPC `create_items`) until kipy offers native library loading
+
+### CLI Backend (Headless, read-only) -- New
+
+- **Status:** Available via `backend_type='cli'` / `KICAD_BACKEND=cli`
+- Wraps the official `kicad-cli` binary for GUI-less export/DRC/render/stats/jobset/import/upgrade
+- Cannot edit boards (no in-memory handle); intentionally excluded from `auto`
+- See `docs/PHASE3_ASSESSMENT.md` for the rationale
+
+### SWIG Backend (File-based) -- Deprecated
+
+- **Status:** Deprecated but still usable as of KiCad 10.0.5 (pcbnew module present)
+- Direct pcbnew API access via KiCAD's Python bindings
+- Requires manual KiCAD UI reload to see changes; works without KiCAD running
+- Auto-saves after every board-modifying command
+- Will be retired once the IPC backend covers footprint-library loading without SWIG
 
 ### Hybrid Approach
 
-The server automatically selects the best backend:
+The server automatically selects the best backend (`auto`):
 
 - IPC when KiCAD is running with IPC enabled
 - SWIG fallback when IPC is unavailable
-- Some operations use both (e.g., footprint placement)
+- CLI backend is opt-in only (read-only/export/CI workflows)
 
 ---
 

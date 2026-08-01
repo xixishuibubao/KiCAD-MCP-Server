@@ -180,7 +180,7 @@ if utils_dir not in sys.path:
     sys.path.insert(0, utils_dir)
 
 # Import platform helper and add KiCAD paths
-from utils.kicad_cli import kicad_cli_not_found_message, resolve_kicad_cli
+from utils.kicad_cli import kicad_cli_not_found_message, resolve_kicad_cli, run_cli
 from utils.kicad_process import KiCADProcessManager, check_and_launch_kicad
 from utils.platform_helper import PlatformHelper
 from utils.project_settings_guard import preserve_project_settings
@@ -620,6 +620,11 @@ class KiCADInterface(SchematicHandlersMixin):
             "export_pcb_dxf": self._handle_export_pcb_dxf,
             "export_gerber_single": self._handle_export_gerber_single,
             "export_3d_cli": self._handle_export_3d_cli,
+            "export_pcb_render": self._handle_export_pcb_render,
+            "get_board_stats": self._handle_get_board_stats,
+            "run_jobset": self._handle_run_jobset,
+            "upgrade_schematic": self._handle_upgrade_schematic,
+            "upgrade_board": self._handle_upgrade_board,
             "export_sch_bom": self._handle_export_sch_bom,
             "export_sch_pdf": self._handle_export_sch_pdf,
             "export_sch_svg": self._handle_export_sch_svg,
@@ -3105,10 +3110,11 @@ class KiCADInterface(SchematicHandlersMixin):
 
         IPC-2581 is a single-file MES/CAD interchange format carrying placement,
         nets, and BOM part data inline. The bom-col-* params map schematic fields
-        to the BOM columns embedded in the file. Reads the saved .kicad_pcb.
+        to the BOM columns embedded in the file. ``variant`` selects assembly
+        variant(s) (use ${VARIANT} in outputPath for per-variant files);
+        ``bomRev`` sets the BOM revision (defaults to the schematic revision).
+        Reads the saved .kicad_pcb.
         """
-        import subprocess
-
         logger.info("Exporting IPC-2581 via kicad-cli")
         try:
             board_path = params.get("boardPath") or self._current_board_path()
@@ -3124,19 +3130,15 @@ class KiCADInterface(SchematicHandlersMixin):
             if not output_path:
                 return {"success": False, "message": "outputPath is required"}
 
-            kicad_cli = self._find_kicad_cli_static()
-            if not kicad_cli:
-                return {"success": False, "message": kicad_cli_not_found_message()}
-
             output_path = str(Path(output_path).expanduser().resolve())
             Path(output_path).parent.mkdir(parents=True, exist_ok=True)
 
-            cmd = [kicad_cli, "pcb", "export", "ipc2581", "--output", output_path]
+            args: list = ["pcb", "export", "ipc2581", "--output", output_path]
 
             if params.get("drawingSheet"):
-                cmd += ["--drawing-sheet", params["drawingSheet"]]
+                args += ["--drawing-sheet", params["drawingSheet"]]
             for kv in params.get("defineVar", []) or []:
-                cmd += ["--define-var", kv]
+                args += ["--define-var", kv]
 
             value_map = {
                 "precision": "--precision",
@@ -3147,32 +3149,40 @@ class KiCADInterface(SchematicHandlersMixin):
                 "bomColMfg": "--bom-col-mfg",
                 "bomColDistPn": "--bom-col-dist-pn",
                 "bomColDist": "--bom-col-dist",
+                "bomRev": "--bom-rev",
             }
             for key, flag in value_map.items():
                 val = params.get(key)
                 if val is not None and val != "":
-                    cmd += [flag, str(val)]
+                    args += [flag, str(val)]
+
+            # variant may be a single string or a list; repeatable flag
+            variants = params.get("variant")
+            if variants:
+                lst = variants if isinstance(variants, list) else [variants]
+                for v in lst:
+                    args += ["--variant", str(v)]
 
             if params.get("compress"):
-                cmd.append("--compress")
+                args.append("--compress")
 
-            cmd.append(board_path)
+            args.append(board_path)
 
-            logger.info(f"Running: {' '.join(cmd)}")
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+            try:
+                timeout_sec = int(params.get("timeoutSec", 180))
+            except (TypeError, ValueError):
+                timeout_sec = 180
+            timeout_sec = max(30, min(timeout_sec, 1800))
 
-            if result.returncode != 0:
+            res = run_cli(args, timeout=timeout_sec)
+            if not res["success"]:
                 return {
                     "success": False,
-                    "message": f"kicad-cli failed (exit {result.returncode}): "
-                    f"{result.stderr.strip()}",
+                    "message": f"kicad-cli failed (exit {res['returncode']}): "
+                    f"{res['stderr'].strip()}",
                 }
             return {"success": True, "outputPath": output_path}
 
-        except FileNotFoundError:
-            return {"success": False, "message": kicad_cli_not_found_message()}
-        except subprocess.TimeoutExpired:
-            return {"success": False, "message": "kicad-cli timed out after 180 seconds"}
         except Exception as e:
             logger.error(f"Error exporting IPC-2581: {e}")
             return {"success": False, "message": str(e)}
@@ -3181,10 +3191,10 @@ class KiCADInterface(SchematicHandlersMixin):
         """Export the PCB in ODB++ format via kicad-cli (`pcb export odb`).
 
         ODB++ is a fab/assembly job archive. ``compression`` selects the output
-        container (zip / tgz / none). Reads the saved .kicad_pcb.
+        container (zip / tgz / none). ``variant`` selects assembly variant(s)
+        (use ${VARIANT} in outputPath for per-variant files); ``checkZones``
+        refills zones if required before export. Reads the saved .kicad_pcb.
         """
-        import subprocess
-
         logger.info("Exporting ODB++ via kicad-cli")
         try:
             board_path = params.get("boardPath") or self._current_board_path()
@@ -3200,21 +3210,17 @@ class KiCADInterface(SchematicHandlersMixin):
             if not output_path:
                 return {"success": False, "message": "outputPath is required"}
 
-            kicad_cli = self._find_kicad_cli_static()
-            if not kicad_cli:
-                return {"success": False, "message": kicad_cli_not_found_message()}
-
             output_path = str(Path(output_path).expanduser().resolve())
             parent = Path(output_path).parent
             if parent:
                 Path(parent).mkdir(parents=True, exist_ok=True)
 
-            cmd = [kicad_cli, "pcb", "export", "odb", "--output", output_path]
+            args: list = ["pcb", "export", "odb", "--output", output_path]
 
             if params.get("drawingSheet"):
-                cmd += ["--drawing-sheet", params["drawingSheet"]]
+                args += ["--drawing-sheet", params["drawingSheet"]]
             for kv in params.get("defineVar", []) or []:
-                cmd += ["--define-var", kv]
+                args += ["--define-var", kv]
             for key, flag in {
                 "precision": "--precision",
                 "compression": "--compression",
@@ -3222,25 +3228,35 @@ class KiCADInterface(SchematicHandlersMixin):
             }.items():
                 val = params.get(key)
                 if val is not None and val != "":
-                    cmd += [flag, str(val)]
+                    args += [flag, str(val)]
 
-            cmd.append(board_path)
+            if params.get("checkZones"):
+                args.append("--check-zones")
 
-            logger.info(f"Running: {' '.join(cmd)}")
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+            # variant may be a single string or a list; repeatable flag
+            variants = params.get("variant")
+            if variants:
+                lst = variants if isinstance(variants, list) else [variants]
+                for v in lst:
+                    args += ["--variant", str(v)]
 
-            if result.returncode != 0:
+            args.append(board_path)
+
+            try:
+                timeout_sec = int(params.get("timeoutSec", 180))
+            except (TypeError, ValueError):
+                timeout_sec = 180
+            timeout_sec = max(30, min(timeout_sec, 1800))
+
+            res = run_cli(args, timeout=timeout_sec)
+            if not res["success"]:
                 return {
                     "success": False,
-                    "message": f"kicad-cli failed (exit {result.returncode}): "
-                    f"{result.stderr.strip()}",
+                    "message": f"kicad-cli failed (exit {res['returncode']}): "
+                    f"{res['stderr'].strip()}",
                 }
             return {"success": True, "outputPath": output_path}
 
-        except FileNotFoundError:
-            return {"success": False, "message": kicad_cli_not_found_message()}
-        except subprocess.TimeoutExpired:
-            return {"success": False, "message": "kicad-cli timed out after 180 seconds"}
         except Exception as e:
             logger.error(f"Error exporting ODB++: {e}")
             return {"success": False, "message": str(e)}
@@ -3986,6 +4002,292 @@ class KiCADInterface(SchematicHandlersMixin):
             return {"success": False, "message": "kicad-cli timed out after 300 seconds"}
         except Exception as e:
             logger.error(f"Error exporting 3D model: {e}")
+            return {"success": False, "message": str(e)}
+
+    def _handle_export_pcb_render(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Render the PCB in 3D to a PNG/JPEG image via kicad-cli (`pcb render`).
+
+        Exposes the full 3D render option set (width/height, side, background,
+        quality, preset, perspective, zoom/pan/pivot/rotate, light intensities,
+        board stackup colors, floor). Reads the saved .kicad_pcb. This is the
+        KiCad-native way to produce a board image — there is no `pcb export png`
+        subcommand.
+        """
+        logger.info("Rendering PCB 3D image via kicad-cli")
+        try:
+            board_path = params.get("boardPath") or self._current_board_path()
+            output_path = params.get("outputPath")
+
+            if not board_path:
+                return {
+                    "success": False,
+                    "message": "boardPath is required (no current board could be resolved)",
+                }
+            if not Path(board_path).exists():
+                return {"success": False, "message": f"Board not found: {board_path}"}
+            if not output_path:
+                return {"success": False, "message": "outputPath is required"}
+
+            output_path = str(Path(output_path).expanduser().resolve())
+            parent = Path(output_path).parent
+            if parent:
+                Path(parent).mkdir(parents=True, exist_ok=True)
+
+            args: list = ["pcb", "render", "--output", output_path]
+
+            # Repeated string list args
+            for key, flag in (("defineVar", "--define-var"), ("variant", "--variant")):
+                vals = params.get(key)
+                if vals:
+                    lst = vals if isinstance(vals, list) else [vals]
+                    for v in lst:
+                        args += [flag, str(v)]
+
+            # Single-value args
+            value_map = {
+                "width": "--width",
+                "height": "--height",
+                "side": "--side",
+                "background": "--background",
+                "quality": "--quality",
+                "preset": "--preset",
+                "zoom": "--zoom",
+                "pan": "--pan",
+                "pivot": "--pivot",
+                "rotate": "--rotate",
+                "lightTop": "--light-top",
+                "lightBottom": "--light-bottom",
+                "lightSide": "--light-side",
+                "lightCamera": "--light-camera",
+                "lightSideElevation": "--light-side-elevation",
+            }
+            for key, flag in value_map.items():
+                val = params.get(key)
+                if val is not None and val != "":
+                    args += [flag, str(val)]
+
+            # Boolean flags
+            for key, flag in (
+                ("useBoardStackupColors", "--use-board-stackup-colors"),
+                ("floor", "--floor"),
+                ("perspective", "--perspective"),
+            ):
+                if params.get(key):
+                    args.append(flag)
+
+            args.append(board_path)
+
+            try:
+                timeout_sec = int(params.get("timeoutSec", 300))
+            except (TypeError, ValueError):
+                timeout_sec = 300
+            timeout_sec = max(30, min(timeout_sec, 1800))
+
+            res = run_cli(args, timeout=timeout_sec)
+            if not res["success"]:
+                return {
+                    "success": False,
+                    "message": f"kicad-cli failed (exit {res['returncode']}): "
+                    f"{res['stderr'].strip()}",
+                }
+            return {"success": True, "outputPath": output_path}
+
+        except Exception as e:
+            logger.error(f"Error rendering PCB 3D image: {e}")
+            return {"success": False, "message": str(e)}
+
+    def _handle_get_board_stats(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate a board statistics report via kicad-cli (`pcb export stats`).
+
+        Returns board area, copper area, hole count, footprint count, net count,
+        etc. — useful for cost estimation and CI gate checks. Reads the saved
+        .kicad_pcb. Output is JSON (default) or a human-readable report.
+        """
+        import json
+
+        logger.info("Generating board stats via kicad-cli")
+        tmp_path: Optional[str] = None
+        try:
+            board_path = params.get("boardPath") or self._current_board_path()
+
+            if not board_path:
+                return {
+                    "success": False,
+                    "message": "boardPath is required (no current board could be resolved)",
+                }
+            if not Path(board_path).exists():
+                return {"success": False, "message": f"Board not found: {board_path}"}
+
+            fmt = params.get("format", "json")
+            units = params.get("units", "mm")
+
+            # Write to a temp file when JSON so we can parse & return structured
+            # data; for "report" we return stdout directly.
+            tmp_path: Optional[str] = None
+            output_path = params.get("outputPath")
+            if not output_path and fmt == "json":
+                import tempfile
+
+                fd, tmp_path = tempfile.mkstemp(suffix=".json")
+                os.close(fd)
+                output_path = tmp_path
+
+            args: list = ["pcb", "export", "stats", "--format", str(fmt), "--units", str(units)]
+            if output_path:
+                args += ["--output", str(Path(output_path).expanduser().resolve())]
+            for key, flag in (
+                ("excludeFootprintsWithoutPads", "--exclude-footprints-without-pads"),
+                ("subtractHolesFromBoard", "--subtract-holes-from-board"),
+                ("subtractHolesFromCopper", "--subtract-holes-from-copper"),
+            ):
+                if params.get(key):
+                    args.append(flag)
+            args.append(board_path)
+
+            try:
+                timeout_sec = int(params.get("timeoutSec", 120))
+            except (TypeError, ValueError):
+                timeout_sec = 120
+            timeout_sec = max(10, min(timeout_sec, 1800))
+
+            res = run_cli(args, timeout=timeout_sec)
+            if not res["success"]:
+                return {
+                    "success": False,
+                    "message": f"kicad-cli failed (exit {res['returncode']}): "
+                    f"{res['stderr'].strip()}",
+                }
+
+            result: Dict[str, Any] = {"success": True, "format": fmt, "units": units}
+            if fmt == "json" and output_path and Path(output_path).exists():
+                try:
+                    with open(output_path, "r", encoding="utf-8") as f:
+                        result["stats"] = json.load(f)
+                except Exception as e:
+                    logger.warning(f"Could not parse stats JSON: {e}")
+                    result["stats"] = res["stdout"]
+                result["outputPath"] = output_path
+            else:
+                result["report"] = res["stdout"]
+            return result
+
+        except Exception as e:
+            logger.error(f"Error generating board stats: {e}")
+            return {"success": False, "message": str(e)}
+        finally:
+            if tmp_path and os.path.exists(tmp_path):
+                try:
+                    os.remove(tmp_path)
+                except OSError:
+                    pass
+
+    def _handle_run_jobset(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Run a KiCad jobset (.kicad_jobset) via kicad-cli (`jobset run`).
+
+        Executes the full job chain defined in the jobset file (DRC/ERC,
+        Gerber/drill/PDF/3D exports, etc.) in one shot — ideal for CI/CD
+        manufacturing delivery. INPUT_FILE is the .kicad_pro project.
+        """
+        logger.info("Running jobset via kicad-cli")
+        try:
+            project_path = params.get("projectPath")
+            if not project_path:
+                return {"success": False, "message": "projectPath (.kicad_pro) is required"}
+            project_path = str(Path(project_path).expanduser().resolve())
+            if not Path(project_path).exists():
+                return {"success": False, "message": f"Project not found: {project_path}"}
+
+            args: list = ["jobset", "run"]
+            if params.get("stopOnError"):
+                args.append("--stop-on-error")
+            jobset_file = params.get("jobsetFile")
+            if jobset_file:
+                args += ["--file", str(Path(jobset_file).expanduser().resolve())]
+            output = params.get("output")
+            if output:
+                args += ["--output", str(output)]
+            args.append(project_path)
+
+            try:
+                timeout_sec = int(params.get("timeoutSec", 600))
+            except (TypeError, ValueError):
+                timeout_sec = 600
+            timeout_sec = max(30, min(timeout_sec, 3600))
+
+            res = run_cli(args, timeout=timeout_sec)
+            if not res["success"]:
+                return {
+                    "success": False,
+                    "message": f"kicad-cli jobset run failed (exit {res['returncode']}): "
+                    f"{res['stderr'].strip()}",
+                    "stdout": res["stdout"],
+                }
+            return {
+                "success": True,
+                "projectPath": project_path,
+                "stdout": res["stdout"],
+            }
+
+        except Exception as e:
+            logger.error(f"Error running jobset: {e}")
+            return {"success": False, "message": str(e)}
+
+    def _handle_upgrade_schematic(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Upgrade a schematic file's format to the latest via kicad-cli (`sch upgrade`).
+
+        Resaves the .kicad_sch in the current KiCad S-expression format. Use
+        --force to resave regardless of versioning. Useful to normalize older
+        files before editing and to reduce kicad-skip compatibility issues.
+        """
+        return self._run_upgrade("sch", params)
+
+    def _handle_upgrade_board(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Upgrade a board file's format to the latest via kicad-cli (`pcb upgrade`).
+
+        Resaves the .kicad_pcb in the current KiCad S-expression format. Use
+        --force to resave regardless of versioning. Useful to normalize older
+        files before editing and to reduce kicad-skip compatibility issues.
+        """
+        return self._run_upgrade("pcb", params)
+
+    def _run_upgrade(self, scope: str, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Shared helper for sch upgrade / pcb upgrade."""
+        logger.info(f"Upgrading {scope} file via kicad-cli")
+        try:
+            input_path = params.get("inputPath")
+            if not input_path:
+                return {"success": False, "message": "inputPath is required"}
+            input_path = str(Path(input_path).expanduser().resolve())
+            if not Path(input_path).exists():
+                return {"success": False, "message": f"Input file not found: {input_path}"}
+
+            args: list = [scope, "upgrade"]
+            if params.get("force"):
+                args.append("--force")
+            args.append(input_path)
+
+            try:
+                timeout_sec = int(params.get("timeoutSec", 180))
+            except (TypeError, ValueError):
+                timeout_sec = 180
+            timeout_sec = max(15, min(timeout_sec, 1800))
+
+            res = run_cli(args, timeout=timeout_sec)
+            if not res["success"]:
+                return {
+                    "success": False,
+                    "message": f"kicad-cli {scope} upgrade failed (exit {res['returncode']}): "
+                    f"{res['stderr'].strip()}",
+                    "stdout": res["stdout"],
+                }
+            return {
+                "success": True,
+                "inputPath": input_path,
+                "stdout": res["stdout"],
+            }
+
+        except Exception as e:
+            logger.error(f"Error upgrading {scope} file: {e}")
             return {"success": False, "message": str(e)}
 
     def _handle_export_sch_bom(self, params: Dict[str, Any]) -> Dict[str, Any]:

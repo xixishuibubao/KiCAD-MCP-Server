@@ -2,7 +2,7 @@
 
 KiCAD MCP Server -- AI-assisted PCB design via Model Context Protocol
 
-**Version:** 2.2.3 | **Tools:** 122 | **Last Updated:** 2026-03-21
+**Version:** 2.2.3 | **Tools:** 151 | **Last Updated:** 2026-08-01
 
 ---
 
@@ -21,7 +21,7 @@ KiCAD MCP Server -- AI-assisted PCB design via Model Context Protocol
 
 | Document                                                                | Description                                                 |
 | ----------------------------------------------------------------------- | ----------------------------------------------------------- |
-| [Tool Inventory](TOOL_INVENTORY.md)                                     | Complete list of all 122 tools with access types            |
+| [Tool Inventory](TOOL_INVENTORY.md)                                     | Complete list of all 151 tools with access types            |
 | [Schematic Tools Reference](SCHEMATIC_TOOLS_REFERENCE.md)               | 27 schematic tools -- components, wiring, analysis, export  |
 | [Routing Tools Reference](ROUTING_TOOLS_REFERENCE.md)                   | 13 routing tools -- traces, vias, differential pairs, zones |
 | [Footprint and Symbol Creator Guide](FOOTPRINT_SYMBOL_CREATOR_GUIDE.md) | 8 tools for creating custom footprints and symbols          |
@@ -39,6 +39,9 @@ KiCAD MCP Server -- AI-assisted PCB design via Model Context Protocol
 | [JLCPCB Usage Guide](JLCPCB_USAGE_GUIDE.md)   | Detailed JLCPCB setup and usage                    |
 | [Library Integration](LIBRARY_INTEGRATION.md) | Footprint and symbol library setup                 |
 | [IPC Backend Status](IPC_BACKEND_STATUS.md)   | Real-time KiCAD UI synchronization (experimental)  |
+| [Phase 3 Assessment](PHASE3_ASSESSMENT.md)    | Headless editing path & SWIG retirement evaluation |
+| [MCP Extension Assessment](MCP_EXTENSION_ASSESSMENT.md) | KiCad source review for further MCP capabilities |
+| [Huaqiu MCP Comparison](HUAQIU_KICAD_MCP_COMPARISON.md) | Huaqiu kicad-mcp vs this repo's MCP |
 
 ---
 

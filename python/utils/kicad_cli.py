@@ -26,9 +26,10 @@ import logging
 import os
 import platform
 import shutil
+import subprocess
 import sys
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger("kicad_interface")
 
@@ -170,3 +171,104 @@ def reset_cache() -> None:
     """Clear the cached resolution (primarily for tests)."""
     global _cached_cli
     _cached_cli = None
+
+
+def run_cli(
+    args: List[str],
+    *,
+    timeout: float = 120.0,
+    capture_output: bool = True,
+    text: bool = True,
+    input_str: Optional[str] = None,
+    cwd: Optional[str] = None,
+    env: Optional[Dict[str, str]] = None,
+) -> Dict[str, Any]:
+    """Run ``kicad-cli`` with the given argument list.
+
+    ``args`` is the argument list AFTER the kicad-cli binary
+    (e.g. ``["pcb", "drc", "--format", "json", board_path]``). The kicad-cli
+    path is resolved automatically via :func:`resolve_kicad_cli`, so callers
+    never need to locate the binary themselves.
+
+    Centralizes path resolution, timeout, logging and error handling so every
+    CLI-backed MCP tool behaves consistently. All failures are returned in
+    the dict (nothing is raised) so callers can surface errors to MCP clients
+    uniformly.
+
+    Returns a standardized result dict::
+
+        {
+            "success": bool,          # True iff returncode == 0
+            "returncode": int,         # subprocess returncode (-1 if not run)
+            "stdout": str,
+            "stderr": str,
+            "command": str,            # full command string for logging
+            "cli_path": str,           # resolved kicad-cli path ("" if not found)
+            "error": Optional[str],    # error message if failed, else None
+        }
+    """
+    cli = resolve_kicad_cli()
+    if not cli:
+        msg = kicad_cli_not_found_message()
+        return {
+            "success": False,
+            "returncode": -1,
+            "stdout": "",
+            "stderr": msg,
+            "command": "",
+            "cli_path": "",
+            "error": msg,
+        }
+
+    full_cmd = [cli] + list(args)
+    cmd_str = " ".join(full_cmd)
+    logger.info(f"kicad-cli run: {cmd_str}")
+
+    try:
+        result = subprocess.run(
+            full_cmd,
+            capture_output=capture_output,
+            text=text,
+            timeout=timeout,
+            input=input_str,
+            cwd=cwd,
+            env=env,
+        )
+    except subprocess.TimeoutExpired as e:
+        logger.error(f"kicad-cli timed out after {timeout}s: {cmd_str}")
+        return {
+            "success": False,
+            "returncode": -1,
+            "stdout": (e.stdout or "") if isinstance(e.stdout, str) else "",
+            "stderr": (e.stderr or f"Timeout after {timeout}s"),
+            "command": cmd_str,
+            "cli_path": cli,
+            "error": f"kicad-cli timed out after {timeout}s",
+        }
+    except Exception as e:  # pragma: no cover - defensive
+        logger.error(f"kicad-cli failed to run: {e}")
+        return {
+            "success": False,
+            "returncode": -1,
+            "stdout": "",
+            "stderr": str(e),
+            "command": cmd_str,
+            "cli_path": cli,
+            "error": str(e),
+        }
+
+    success = result.returncode == 0
+    if not success:
+        logger.error(
+            f"kicad-cli exit {result.returncode}: {(result.stderr or '').strip()}"
+        )
+
+    return {
+        "success": success,
+        "returncode": result.returncode,
+        "stdout": result.stdout or "",
+        "stderr": result.stderr or "",
+        "command": cmd_str,
+        "cli_path": cli,
+        "error": None if success else (result.stderr or f"exit code {result.returncode}"),
+    }
