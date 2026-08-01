@@ -1824,6 +1824,8 @@ class EagleCommands:
                 [cli, "sch", "erc", sch_path, "-o", report_path],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=120,
             )
             if result.returncode != 0 or not os.path.exists(report_path):
@@ -1860,6 +1862,8 @@ class EagleCommands:
                 [cli, "pcb", "import", "--format", "eagle", "--output", pcb_out, brd_file],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=60,
             )
             if result.returncode == 0 and os.path.exists(pcb_out):

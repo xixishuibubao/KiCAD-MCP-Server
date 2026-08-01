@@ -380,13 +380,16 @@ class PlatformHelper:
         for config_path in kicad_common_paths:
             if config_path.exists():
                 try:
-                    with open(config_path, "r") as f:
+                    # kicad_common.json is UTF-8 (KiCad writes it as such); on
+                    # Windows the default text encoding is cp936/gbk, which
+                    # raises UnicodeDecodeError on non-ASCII bytes. Force UTF-8.
+                    with open(config_path, "r", encoding="utf-8") as f:
                         config = json.load(f)
                     vars_ = config.get("environment", {}).get("vars", {})
                     if isinstance(vars_, dict):
                         env_vars.update({k: str(v) for k, v in vars_.items()})
                     break
-                except (json.JSONDecodeError, KeyError, TypeError):
+                except (json.JSONDecodeError, KeyError, TypeError, UnicodeDecodeError):
                     pass
         return env_vars
 

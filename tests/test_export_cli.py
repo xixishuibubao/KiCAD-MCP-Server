@@ -58,11 +58,19 @@ def _make_iface():
     return iface
 
 
-def _call(iface, suffix, params, rc=0, stderr=""):
-    """Invoke a handler with subprocess + filesystem mocked. Returns (result, run_mock)."""
+def _call(iface, suffix, params, rc=0, stderr="", cli_path="kicad-cli"):
+    """Invoke a handler with subprocess + filesystem mocked. Returns (result, run_mock).
+
+    ``cli_path`` mocks the resolved kicad-cli binary path (via
+    ``utils.kicad_cli.resolve_kicad_cli``); pass ``""`` to simulate kicad-cli
+    not being installed. Handlers that export via ``run_cli`` look up the
+    binary through ``resolve_kicad_cli`` (not the legacy
+    ``_find_kicad_cli_static``), so that is what we patch here.
+    """
     method = getattr(iface, f"_handle_export_{suffix}")
     fake = SimpleNamespace(returncode=rc, stdout="", stderr=stderr)
     with (
+        patch("utils.kicad_cli.resolve_kicad_cli", return_value=cli_path),
         patch("subprocess.run", return_value=fake) as run,
         patch("pathlib.Path.exists", return_value=True),
         patch("pathlib.Path.mkdir"),
@@ -88,8 +96,11 @@ class TestAllHandlers:
     @pytest.mark.parametrize("suffix,params", ALL_HANDLERS)
     def test_cli_not_found(self, suffix, params):
         iface = _make_iface()
+        # Cover both code paths: handlers that resolve kicad-cli via run_cli
+        # (patched through _call's cli_path="") and handlers that still call
+        # _find_kicad_cli_static directly.
         iface._find_kicad_cli_static = MagicMock(return_value=None)
-        result, _ = _call(iface, suffix, params)
+        result, _ = _call(iface, suffix, params, cli_path="")
         assert result["success"] is False
         assert "kicad-cli" in result["message"].lower()
 

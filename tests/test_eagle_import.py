@@ -47,7 +47,7 @@ def test_generate_kicad_sch_from_minimal_fixture(tmp_path: Path) -> None:
     assert dangling == 0
     text = out.read_text(encoding="utf-8")
     assert text.startswith(
-        '(kicad_sch (version 20260101) (generator "eeschema")' ' (generator_version "10.0")'
+        '(kicad_sch (version 20260306) (generator "eeschema")' ' (generator_version "10.0")'
     )
     assert "eagle_import:" in text
     assert "(symbol (lib_id" in text
@@ -93,6 +93,8 @@ def test_minimal_fixture_exports_pdf(tmp_path: Path) -> None:
         [str(_KICAD_CLI), "sch", "export", "pdf", "--output", str(pdf), str(sch)],
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
     )
     assert result.returncode == 0, result.stderr
     assert pdf.exists()

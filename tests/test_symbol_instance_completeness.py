@@ -326,10 +326,14 @@ class TestKicadCliRoundTrip:
         before = _placed_block(sch)
 
         # 1) ERC must load/parse the file (non-zero exit just means violations exist).
+        # encoding=utf-8: kicad-cli writes UTF-8; on Windows the default text
+        # encoding is cp936/gbk, which leaves stdout/stderr as None on CJK paths.
         erc = subprocess.run(
             [self.cli, "sch", "erc", str(sch)],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             cwd=str(tmp_path),
         )
         assert "Failed to load" not in (erc.stdout + erc.stderr)
@@ -339,6 +343,8 @@ class TestKicadCliRoundTrip:
             [self.cli, "sch", "upgrade", str(sch)],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             cwd=str(tmp_path),
         )
         assert up.returncode == 0, up.stdout + up.stderr

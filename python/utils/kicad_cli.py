@@ -229,6 +229,12 @@ def run_cli(
             full_cmd,
             capture_output=capture_output,
             text=text,
+            # kicad-cli writes UTF-8; on Windows the default text encoding is
+            # cp936/gbk, which UnicodeDecodeError's on non-ASCII bytes (e.g.
+            # CJK paths in output), leaving stdout/stderr as None. Force UTF-8
+            # and replace any undecodable bytes so callers always get a string.
+            encoding="utf-8" if text else None,
+            errors="replace" if text else None,
             timeout=timeout,
             input=input_str,
             cwd=cwd,
