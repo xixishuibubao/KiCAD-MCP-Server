@@ -112,7 +112,7 @@
 
 See the roadmap items above and want to help? High-value contributions:
 
-1. Testing on Windows/macOS with KiCAD 9
+1. Testing on Windows/macOS with KiCAD 10
 2. Example projects and workflow documentation
 3. Bug reports with reproduction steps
 4. New tool implementations (see [ARCHITECTURE.md](ARCHITECTURE.md))

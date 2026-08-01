@@ -106,7 +106,7 @@ and per-user KiCAD installs:
 
 3. **If KiCAD is not installed:**
    - Download from https://www.kicad.org/download/windows/
-   - Install KiCAD 9.0 or higher
+   - Install KiCAD 10.0 or higher
    - Use default installation path
 
 ---
@@ -247,7 +247,7 @@ and per-user KiCAD installs:
 **Solution:**
 
 KiCAD MCP requires Python 3.10+. KiCAD 10.0 includes a compatible bundled Python,
-and KiCAD 9.0+ is supported.
+and KiCAD 10.0+ is supported.
 
 **Always use KiCAD's bundled Python:**
 
@@ -489,7 +489,7 @@ If none of the above solutions work:
 
 When everything works, you should have:
 
-- [ ] KiCAD 9.0 or higher installed under a versioned KiCAD directory such as
+- [ ] KiCAD 10.0 or higher installed under a versioned KiCAD directory such as
       `C:\Program Files\KiCad\10.0` or `%LOCALAPPDATA%\Programs\KiCad\10.0`
 - [ ] Node.js 18+ installed and in PATH
 - [ ] Python can import pcbnew successfully

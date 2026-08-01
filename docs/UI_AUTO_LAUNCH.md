@@ -242,8 +242,8 @@ The system searches for KiCAD in:
 
 **Windows:**
 
+- `C:/Program Files/KiCad/10.0/bin/pcbnew.exe`
 - `C:/Program Files/KiCad/9.0/bin/pcbnew.exe`
-- `C:/Program Files/KiCad/8.0/bin/pcbnew.exe`
 
 ### Launch Process
 

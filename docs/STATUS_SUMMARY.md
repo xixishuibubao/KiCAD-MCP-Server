@@ -12,7 +12,7 @@
 | -------------------- | --------------------------- |
 | Total MCP Tools      | 122                         |
 | Tool Categories      | 16                          |
-| KiCAD 9.0 Compatible | Yes (verified)              |
+| KiCAD 10.0 Compatible | Yes (verified)              |
 | Platforms            | Linux, Windows, macOS       |
 | JLCPCB Parts Catalog | 2.5M+ components            |
 | Symbol Access        | ~10,000 via dynamic loading |
@@ -58,7 +58,7 @@
 ### IPC Backend (Real-time) -- Experimental
 
 - **Status:** Functional, 21 commands implemented
-- Real-time UI synchronization with KiCAD 9+
+- Real-time UI synchronization with KiCAD 10.0+
 - Requires KiCAD running with IPC API enabled
 - Automatic fallback to SWIG when unavailable
 
@@ -76,7 +76,7 @@ The server automatically selects the best backend:
 
 ### Linux -- Primary Platform
 
-- KiCAD 9.0 detection: Working
+- KiCAD 10.0 detection: Working
 - Process management: Working
 - Library discovery: Working (153+ libraries)
 - IPC backend: Working

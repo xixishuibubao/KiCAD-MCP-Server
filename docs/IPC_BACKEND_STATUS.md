@@ -9,7 +9,7 @@
 
 ## Overview
 
-The IPC backend provides real-time UI synchronization with KiCAD 9.0+ via the official IPC API. When KiCAD is running with IPC enabled, commands can update the KiCAD UI immediately without requiring manual reload.
+The IPC backend provides real-time UI synchronization with KiCAD 10.0+ via the official IPC API. When KiCAD is running with IPC enabled, commands can update the KiCAD UI immediately without requiring manual reload.
 
 This feature is experimental and under active testing. The server uses a hybrid
 approach: IPC when available, automatic fallback to SWIG when IPC is not
@@ -118,7 +118,7 @@ The following MCP commands have IPC handlers:
 
 ### Prerequisites
 
-1. **KiCAD 9.0+** must be running
+1. **KiCAD 10.0+** must be running
 2. **IPC API must be enabled**: `Preferences > Plugins > Enable IPC API Server`
 3. A board must be open in the PCB editor
 
@@ -211,7 +211,7 @@ Run the test script to verify IPC functionality:
 +---------------------------+---------------------------------+
                             |
 +---------------------------v---------------------------------+
-|              KiCAD 9.0+ (IPC Server)                        |
+|              KiCAD 10.0+ (IPC Server)                        |
 +-------------------------------------------------------------+
 ```
 
@@ -247,7 +247,7 @@ pip install kicad-python
 ### "Version mismatch"
 
 - Update kicad-python: `pip install --upgrade kicad-python`
-- Ensure KiCAD 9.0+ is installed
+- Ensure KiCAD 10.0+ is installed
 
 ### "No board open"
 

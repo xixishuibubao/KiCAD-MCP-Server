@@ -10,7 +10,7 @@
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](../LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey.svg)](../docs/PLATFORM_GUIDE.md)
-[![KiCAD](https://img.shields.io/badge/KiCAD-9.0+-green.svg)](https://www.kicad.org/)
+[![KiCAD](https://img.shields.io/badge/KiCAD-10.0+-green.svg)](https://www.kicad.org/)
 [![Stars](https://img.shields.io/github/stars/mixelpixx/KiCAD-MCP-Server.svg)](https://github.com/mixelpixx/KiCAD-MCP-Server/stargazers)
 [![Discussions](https://img.shields.io/badge/community-Discussions-orange.svg)](https://github.com/mixelpixx/KiCAD-MCP-Server/discussions)
 
@@ -44,7 +44,7 @@
 
 ### 快速开始
 
-1. 安装 [KiCAD 9.0+](https://www.kicad.org/download/)
+1. 安装 [KiCAD 10.0+](https://www.kicad.org/download/)
 2. 安装 [Node.js 18+](https://nodejs.org/) 和 [Python 3.11+](https://www.python.org/)
 3. 克隆并构建：
 

@@ -33,7 +33,7 @@ This guide explains the differences between using KiCAD MCP Server on Linux, mac
 
 **Process:**
 
-1. Install KiCAD 9.0 via package manager (apt, dnf, pacman)
+1. Install KiCAD 10.0 via package manager (apt, dnf, pacman)
 2. Install Node.js via package manager or nvm
 3. Clone repository
 4. Install dependencies manually
@@ -76,7 +76,7 @@ Python: /usr/bin/python3
 
 **Process:**
 
-1. Install KiCAD 9.0 from the official `.dmg` installer
+1. Install KiCAD 10.0 from the official `.dmg` installer
 2. Install Node.js (e.g. via Homebrew or nvm)
 3. Clone repository
 4. Run `pnpm install && pnpm run build`
@@ -121,7 +121,7 @@ Node.js: /usr/local/bin/node  # or via nvm
 
 **Process:**
 
-1. Install KiCAD 9.0 from official installer
+1. Install KiCAD 10.0 from official installer
 2. Install Node.js from official installer
 3. Clone repository
 4. Run `setup-windows.ps1` script
@@ -135,8 +135,8 @@ Node.js: /usr/local/bin/node  # or via nvm
 **Typical paths:**
 
 ```powershell
-KiCAD Python: C:\Program Files\KiCad\9.0\bin\python.exe
-KiCAD Libraries: C:\Program Files\KiCad\9.0\lib\python3\dist-packages
+KiCAD Python: C:\Program Files\KiCad\10.0\bin\python.exe
+KiCAD Libraries: C:\Program Files\KiCad\10.0\lib\python3\dist-packages
 Node.js: C:\Program Files\nodejs\node.exe
 ```
 
@@ -149,7 +149,7 @@ Node.js: C:\Program Files\nodejs\node.exe
       "command": "node",
       "args": ["C:\\Users\\username\\KiCAD-MCP-Server\\dist\\index.js"],
       "env": {
-        "PYTHONPATH": "C:\\Program Files\\KiCad\\9.0\\lib\\python3\\dist-packages"
+        "PYTHONPATH": "C:\\Program Files\\KiCad\\10.0\\lib\\python3\\dist-packages"
       }
     }
   }
@@ -202,8 +202,8 @@ export KICAD_PYTHON=/Applications/KiCad/KiCad.app/Contents/Frameworks/Python.fra
 
 ```powershell
 cd C:\Users\username\KiCAD-MCP-Server
-$env:PYTHONPATH = "C:\Program Files\KiCad\9.0\lib\python3\dist-packages"
-& "C:\Program Files\KiCad\9.0\bin\python.exe" -c "import pcbnew"
+$env:PYTHONPATH = "C:\Program Files\KiCad\10.0\lib\python3\dist-packages"
+& "C:\Program Files\KiCad\10.0\bin\python.exe" -c "import pcbnew"
 ```
 
 **JSON configuration notes:**
@@ -284,7 +284,7 @@ bash setup-macos.sh --verify
 
 **KiCAD Bundled Python:**
 
-- KiCAD 9.0 includes Python 3.11
+- KiCAD 10.0 includes Python 3.11
 - No system Python installation needed
 - Use KiCAD's Python for all MCP operations
 
@@ -292,25 +292,25 @@ bash setup-macos.sh --verify
 
 ```powershell
 # Check KiCAD Python
-& "C:\Program Files\KiCad\9.0\bin\python.exe" --version
+& "C:\Program Files\KiCad\10.0\bin\python.exe" --version
 
 # Verify pcbnew module
-& "C:\Program Files\KiCad\9.0\bin\python.exe" -c "import pcbnew; print(pcbnew.GetBuildVersion())"
+& "C:\Program Files\KiCad\10.0\bin\python.exe" -c "import pcbnew; print(pcbnew.GetBuildVersion())"
 
 # Install project dependencies using KiCAD Python
-& "C:\Program Files\KiCad\9.0\bin\python.exe" -m pip install -r requirements.txt
+& "C:\Program Files\KiCad\10.0\bin\python.exe" -m pip install -r requirements.txt
 ```
 
 **PYTHONPATH:**
 
 ```powershell
 # Temporary (current session)
-$env:PYTHONPATH = "C:\Program Files\KiCad\9.0\lib\python3\dist-packages"
+$env:PYTHONPATH = "C:\Program Files\KiCad\10.0\lib\python3\dist-packages"
 
 # In MCP configuration (permanent)
 {
   "env": {
-    "PYTHONPATH": "C:\\Program Files\\KiCad\\9.0\\lib\\python3\\dist-packages"
+    "PYTHONPATH": "C:\\Program Files\\KiCad\\10.0\\lib\\python3\\dist-packages"
   }
 }
 ```
@@ -387,15 +387,15 @@ node dist/index.js
 **Check KiCAD installation:**
 
 ```powershell
-Test-Path "C:\Program Files\KiCad\9.0"
-& "C:\Program Files\KiCad\9.0\bin\kicad.exe" --version
+Test-Path "C:\Program Files\KiCad\10.0"
+& "C:\Program Files\KiCad\10.0\bin\kicad.exe" --version
 ```
 
 **Check Python module:**
 
 ```powershell
-& "C:\Program Files\KiCad\9.0\bin\python.exe" -c "import sys; print(sys.path)"
-& "C:\Program Files\KiCad\9.0\bin\python.exe" -c "import pcbnew; print(pcbnew.GetBuildVersion())"
+& "C:\Program Files\KiCad\10.0\bin\python.exe" -c "import sys; print(sys.path)"
+& "C:\Program Files\KiCad\10.0\bin\python.exe" -c "import pcbnew; print(pcbnew.GetBuildVersion())"
 ```
 
 **Run automated diagnostics:**
@@ -413,7 +413,7 @@ Get-Content "$env:USERPROFILE\.kicad-mcp\logs\kicad_interface.log" -Tail 50 -Wai
 **Start server manually:**
 
 ```powershell
-$env:PYTHONPATH = "C:\Program Files\KiCad\9.0\lib\python3\dist-packages"
+$env:PYTHONPATH = "C:\Program Files\KiCad\10.0\lib\python3\dist-packages"
 node dist\index.js
 ```
 
@@ -588,7 +588,7 @@ pnpm run watch
 pnpm test
 
 # Test Python changes
-& "C:\Program Files\KiCad\9.0\bin\python.exe" python\kicad_interface.py
+& "C:\Program Files\KiCad\10.0\bin\python.exe" python\kicad_interface.py
 ```
 
 **Recommended tools:**

@@ -396,7 +396,7 @@ See [Schematic Tools Reference](docs/SCHEMATIC_TOOLS_REFERENCE.md) for the compl
 
 ### IPC Backend (Experimental)
 
-We are currently implementing and testing the KiCAD 9.0 IPC API for real-time UI synchronization:
+We are currently implementing and testing the KiCAD 10.0 IPC API for real-time UI synchronization:
 
 - Changes made via MCP tools appear immediately in the KiCAD UI
 - No manual reload required when IPC is active
@@ -656,7 +656,7 @@ See [Freerouting Guide](docs/FREEROUTING_GUIDE.md) for setup and usage.
 
 ### Required Software
 
-**KiCAD 9.0 or higher**
+**KiCAD 10.0 or higher**
 
 - Download from [kicad.org/download](https://www.kicad.org/download/)
 - Must include Python module (pcbnew)
@@ -702,8 +702,8 @@ Choose one:
 ### Linux (Ubuntu/Debian)
 
 ```bash
-# Install KiCAD 9.0 or higher
-sudo add-apt-repository --yes ppa:kicad/kicad-9.0-releases
+# Install KiCAD 10.0 or higher
+sudo add-apt-repository --yes ppa:kicad/kicad-10.0-releases
 sudo apt-get update
 sudo apt-get install -y kicad kicad-libraries
 
@@ -753,7 +753,7 @@ See [Windows Installation Guide](docs/WINDOWS_SETUP.md) for detailed instruction
 #### Manual Setup
 
 ```bash
-# Install KiCAD 9.0 from kicad.org/download/macos
+# Install KiCAD 10.0 from kicad.org/download/macos
 
 # Install Node.js
 brew install node@20
@@ -1385,7 +1385,7 @@ How many Basic parts are available?
 - **kicad_interface.py:** Main entry point, MCP message handler, command routing
 - **kicad_api/:** Backend implementations
   - `base.py` - Abstract base classes for backends
-  - `ipc_backend.py` - KiCAD 9.0 IPC API backend (real-time UI sync)
+  - `ipc_backend.py` - KiCAD 10.0 IPC API backend (real-time UI sync)
   - `swig_backend.py` - pcbnew SWIG API backend (file-based operations)
   - `factory.py` - Backend auto-detection and instantiation
 - **schemas/tool_schemas.py:** JSON Schema definitions for all tools

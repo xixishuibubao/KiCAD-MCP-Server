@@ -19,7 +19,7 @@ Thank you for your interest in contributing to the KiCAD MCP Server! This guide 
 
 ### Prerequisites
 
-- **KiCAD 9.0 or higher** - [Download here](https://www.kicad.org/download/)
+- **KiCAD 10.0 or higher** - [Download here](https://www.kicad.org/download/)
 - **Node.js v18+** - [Download here](https://nodejs.org/)
 - **Python 3.9+** - Comes bundled with KiCAD (macOS builds ship Python 3.9; Linux/Windows builds ship Python 3.11)
 - **Git** - For version control
@@ -29,8 +29,8 @@ Thank you for your interest in contributing to the KiCAD MCP Server! This guide 
 #### Linux (Ubuntu/Debian)
 
 ```bash
-# Install KiCAD 9.0 from official PPA
-sudo add-apt-repository --yes ppa:kicad/kicad-9.0-releases
+# Install KiCAD 10.0 from official PPA
+sudo add-apt-repository --yes ppa:kicad/kicad-10.0-releases
 sudo apt-get update
 sudo apt-get install -y kicad kicad-libraries
 
@@ -59,7 +59,7 @@ pytest
 #### Windows
 
 ```powershell
-# Install KiCAD 9.0 from https://www.kicad.org/download/windows/
+# Install KiCAD 10.0 from https://www.kicad.org/download/windows/
 
 # Install Node.js from https://nodejs.org/
 
@@ -84,7 +84,7 @@ pytest
 #### macOS
 
 ```bash
-# Install KiCAD 9.0 from https://www.kicad.org/download/macos/
+# Install KiCAD 10.0 from https://www.kicad.org/download/macos/
 
 # Install Node.js via Homebrew
 brew install node

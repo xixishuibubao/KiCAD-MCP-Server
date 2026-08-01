@@ -81,7 +81,7 @@ If KiCad is installed in a non-standard location, you can override the Python pa
       "command": "node",
       "args": ["C:\\Users\\YOUR_USERNAME\\MCP\\KiCAD-MCP-Server\\dist\\index.js"],
       "env": {
-        "PYTHONPATH": "C:\\Program Files\\KiCad\\9.0\\bin\\Lib\\site-packages",
+        "PYTHONPATH": "C:\\Program Files\\KiCad\\10.0\\bin\\Lib\\site-packages",
         "NODE_ENV": "production"
       }
     }
@@ -250,8 +250,8 @@ find /Applications/KiCad -name "pcbnew.py" -type f
 ### Windows
 
 ```cmd
-REM Typical location (KiCAD 9.0)
-C:\Program Files\KiCad\9.0\bin\Lib\site-packages
+REM Typical location (KiCAD 10.0)
+C:\Program Files\KiCad\10.0\bin\Lib\site-packages
 
 REM Search for pcbnew.py
 where /r "C:\Program Files\KiCad" pcbnew.py
@@ -361,18 +361,18 @@ If you have multiple KiCAD versions installed:
 ```json
 {
   "mcpServers": {
+    "kicad-10": {
+      "command": "node",
+      "args": ["/path/to/KiCAD-MCP-Server/dist/index.js"],
+      "env": {
+        "PYTHONPATH": "/usr/lib/kicad-10/lib/python3/dist-packages"
+      }
+    },
     "kicad-9": {
       "command": "node",
       "args": ["/path/to/KiCAD-MCP-Server/dist/index.js"],
       "env": {
         "PYTHONPATH": "/usr/lib/kicad-9/lib/python3/dist-packages"
-      }
-    },
-    "kicad-8": {
-      "command": "node",
-      "args": ["/path/to/KiCAD-MCP-Server/dist/index.js"],
-      "env": {
-        "PYTHONPATH": "/usr/lib/kicad-8/lib/python3/dist-packages"
       }
     }
   }

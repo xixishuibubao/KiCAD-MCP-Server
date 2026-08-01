@@ -27,7 +27,7 @@ The KiCAD MCP Server was originally developed for Windows and has several compat
 
 ```json
 "cwd": "c:/repo/KiCAD-MCP",
-"PYTHONPATH": "C:/Program Files/KiCad/9.0/lib/python3/dist-packages"
+"PYTHONPATH": "C:/Program Files/KiCad/10.0/lib/python3/dist-packages"
 ```
 
 **Impact:** Config file won't work on Linux without manual editing
@@ -230,7 +230,7 @@ const DEFAULT_LOG_DIR = join(os.homedir(), ".kicad-mcp", "logs");
 
 ### Ubuntu 24.04 LTS Testing
 
-- [ ] Install KiCAD 9.0 from official PPA
+- [ ] Install KiCAD 10.0 from official PPA
 - [ ] Install Node.js 18+ from NodeSource
 - [ ] Clone repository
 - [ ] Run `pnpm install`
@@ -280,7 +280,7 @@ class PlatformHelper:
     def get_kicad_python_path() -> Path:
         """Get KiCAD Python dist-packages path"""
         if PlatformHelper.is_windows():
-            return Path("C:/Program Files/KiCad/9.0/lib/python3/dist-packages")
+            return Path("C:/Program Files/KiCad/10.0/lib/python3/dist-packages")
         elif PlatformHelper.is_linux():
             # Common Linux paths
             candidates = [

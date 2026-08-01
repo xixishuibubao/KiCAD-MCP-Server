@@ -19,7 +19,7 @@ AI Assistant (Claude, etc.)
         |
         | pcbnew SWIG API or KiCAD IPC API
         v
-    KiCAD 9.0+
+    KiCAD 10.0+
 ```
 
 The server has two layers:
@@ -91,7 +91,7 @@ KiCAD-MCP-Server/
       base.py                 # Abstract base class
       factory.py              # Backend auto-detection
       swig_backend.py         # pcbnew SWIG API backend
-      ipc_backend.py          # KiCAD 9.0 IPC API backend
+      ipc_backend.py          # KiCAD 10.0 IPC API backend
     schemas/                  # JSON Schema definitions
       tool_schemas.py         # Tool parameter schemas
     resources/                # Resource handlers
@@ -188,7 +188,7 @@ Two backends for interacting with KiCAD:
 
 - Communicates with running KiCAD via IPC API socket
 - Changes appear in the UI immediately
-- Requires KiCAD 9.0+ running with IPC enabled
+- Requires KiCAD 10.0+ running with IPC enabled
 - Falls back to SWIG when unavailable
 
 `factory.py` auto-detects which backend to use.
